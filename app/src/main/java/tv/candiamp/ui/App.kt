@@ -35,6 +35,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import tv.candiamp.data.Credentials
 import tv.candiamp.data.LastFmCredentials
+import tv.candiamp.data.LastFmStats
 import tv.candiamp.data.MusicLibrary
 import tv.candiamp.data.RadioLibrary
 import tv.candiamp.data.Scrobbler
@@ -46,6 +47,7 @@ sealed interface Screen {
     data object Albums : Screen
     data object Artists : Screen
     data object Radio : Screen
+    data object LastFmStats : Screen
     data object Settings : Screen
     data object LastFmSetup : Screen
     data class Record(val id: String) : Screen
@@ -60,6 +62,7 @@ fun App(
     radio: RadioLibrary,
     lastFm: LastFmCredentials,
     scrobbler: Scrobbler,
+    stats: LastFmStats,
 ) {
     var connected by remember { mutableStateOf(credentials.isConfigured) }
     if (!connected) {
@@ -75,7 +78,7 @@ fun App(
         if (radio.isStale()) radio.sync()
     }
 
-    LibraryShell(credentials, library, radio, lastFm, scrobbler) { connected = false }
+    LibraryShell(credentials, library, radio, lastFm, scrobbler, stats) { connected = false }
 }
 
 @Composable
@@ -85,6 +88,7 @@ private fun LibraryShell(
     radio: RadioLibrary,
     lastFm: LastFmCredentials,
     scrobbler: Scrobbler,
+    stats: LastFmStats,
     onSignOut: () -> Unit,
 ) {
     val stack = remember { mutableStateListOf<Screen>(Screen.Home) }
@@ -115,6 +119,10 @@ private fun LibraryShell(
                         Screen.Albums -> AlbumsScreen()
                         Screen.Artists -> ArtistsScreen()
                         Screen.Radio -> RadioScreen()
+                        Screen.LastFmStats -> LastFmStatsScreen(lastFm, stats) {
+                            stack.clear()
+                            stack.add(Screen.Settings)
+                        }
                         Screen.Settings -> SettingsScreen(
                             credentials = credentials,
                             lastFm = lastFm,
@@ -147,6 +155,7 @@ private fun Sidebar(current: Screen, onGo: (Screen) -> Unit, onOpenPlayer: () ->
         "Records" to Screen.Albums,
         "Artists" to Screen.Artists,
         "Radio" to Screen.Radio,
+        "Last.fm" to Screen.LastFmStats,
         "Settings" to Screen.Settings,
     )
     val playing = Playback.current
@@ -173,6 +182,7 @@ private fun Sidebar(current: Screen, onGo: (Screen) -> Unit, onOpenPlayer: () ->
                 Screen.Albums -> current is Screen.Albums
                 Screen.Artists -> current is Screen.Artists
                 Screen.Radio -> current is Screen.Radio || current is Screen.RadioShow
+                Screen.LastFmStats -> current is Screen.LastFmStats
                 Screen.Settings -> current is Screen.Settings || current is Screen.LastFmSetup
                 else -> false
             }

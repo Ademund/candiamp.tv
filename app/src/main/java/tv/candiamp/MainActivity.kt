@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import tv.candiamp.data.Credentials
 import tv.candiamp.data.LastFmCredentials
+import tv.candiamp.data.LastFmStats
 import tv.candiamp.data.MusicLibrary
 import tv.candiamp.data.RadioLibrary
 import tv.candiamp.data.Scrobbler
@@ -22,11 +23,12 @@ class MainActivity : ComponentActivity() {
         val radio = RadioLibrary(this)
         val lastFm = LastFmCredentials(this)
         val scrobbler = Scrobbler.get(this, lastFm)
+        val stats = LastFmStats(lastFm)
         Playback.player(this)
         Playback.addListener(scrobbler)
         scrobbler.start()
         setContent {
-            CandiampTheme { App(credentials, library, radio, lastFm, scrobbler) }
+            CandiampTheme { App(credentials, library, radio, lastFm, scrobbler, stats) }
         }
     }
 

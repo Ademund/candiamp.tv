@@ -18,7 +18,7 @@ Working, on a TCL Google TV (Android 14, `G08_4K_GB`), sideloaded. Built as a pr
 | Background audio | Keeps playing when you leave the app (`MediaSession`) |
 | Pairing from a phone | Local HTTP page served by the TV itself |
 | Radio | Scraped from `bandcamp.com/radio`; whole episode as one stream, timestamped tracklist |
-| Last.fm | Account linking, now-playing, scrobbling with a durable queue; stats next (#5) |
+| Last.fm | Linking, scrobbling with a durable queue, and a stats screen (top artists/albums/tracks, recent) |
 | Sync | ~4 s for 17 records / 190 tracks, library cached as JSON with a schema version |
 
 | Missing, and why |
@@ -63,7 +63,7 @@ The pairing code is also written to logcat for development:
 adb logcat -s candiamp
 ```
 
-## Last.fm (linking is in; scrobbling is next)
+## Last.fm — linking, scrobbling and stats
 
 Last.fm support is opt-in. The TV needs the API key and shared secret from a Last.fm API account, and they are entered from a phone rather than with a remote:
 
@@ -82,6 +82,8 @@ Once linked, **scrobbling is on** and can be turned off from Settings:
 - Failed writes retry on Last.fm errors 11/16/29; a revoked session (error 9) shows "Reconnect Last.fm" in Settings instead of silently dropping plays.
 
 Metadata comes from Bandcamp (there are no MusicBrainz IDs), so scrobbles match on artist, title and album.
+
+The **Last.fm** sidebar entry shows the linked profile and top artists, albums and tracks for 7 days, 1 month, 3 months, 12 months or all time, plus recently played. Responses are cached for ten minutes. Rows that exist in the Bandcamp collection carry an **in collection** badge and open the local artist or record; the rest are informational. Stats are read-only and attributed "Powered by Last.fm" with the profile URL. Recommendation rows are not built: Last.fm no longer exposes a recommendations endpoint, and the in-collection `artist.getSimilar` idea is a follow-up.
 
 ## Screens
 
@@ -150,8 +152,9 @@ data/SubsonicClient.kt   auth, the four error shapes, endpoint parsing
 data/MusicLibrary.kt     sync (artists + album cards), track lists on demand, JSON cache
 data/BandcampRadio.kt    the radio scraper: index + data-blob episode parsing
 data/RadioLibrary.kt     radio index/episode cache; signed stream URLs stay in memory
-data/LastFmClient.kt     Last.fm signing, auth calls, scrobbling and error codes
+data/LastFmClient.kt     Last.fm signing, auth, scrobbling, stats calls and error codes
 data/LastFmCredentials.kt Last.fm API key, sealed secret and session key
+data/LastFmStats.kt      profile, top lists, recent tracks and the ten-minute cache
 data/Scrobble.kt         scrobble rules and the durable queue
 data/Scrobbler.kt        playback → now-playing/scrobble orchestration
 data/KeystoreCrypto.kt   AES-GCM helper for values held by the Android keystore
