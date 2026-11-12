@@ -42,12 +42,15 @@ import coil3.compose.AsyncImage
 import tv.candiamp.data.Album
 import tv.candiamp.data.Artist
 import tv.candiamp.data.MusicLibrary
+import tv.candiamp.data.RadioLibrary
 import tv.candiamp.data.Song
 import tv.candiamp.data.durationText
 
 val LocalLibrary = staticCompositionLocalOf<MusicLibrary> { error("No library") }
+val LocalRadio = staticCompositionLocalOf<RadioLibrary> { error("No radio") }
 val LocalOpenAlbum = staticCompositionLocalOf<(String) -> Unit> { {} }
 val LocalOpenArtist = staticCompositionLocalOf<(String) -> Unit> { {} }
+val LocalOpenRadioEpisode = staticCompositionLocalOf<(String) -> Unit> { {} }
 
 @Composable
 fun CoverArt(coverArt: String?, modifier: Modifier = Modifier, letter: String? = null) {

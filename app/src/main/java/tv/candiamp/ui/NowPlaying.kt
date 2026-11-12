@@ -177,7 +177,11 @@ fun NowPlayingScreen(onClose: () -> Unit) {
                 )
                 Spacer(Modifier.height(26.dp))
                 Text(
-                    "Left / Right seek 10 seconds · OK play or pause · Next / Previous track · Back to browse",
+                    if (current.albumId?.startsWith(Playback.RADIO_PREFIX) == true) {
+                        "Left / Right seek 10 seconds · OK play or pause · Back to browse"
+                    } else {
+                        "Left / Right seek 10 seconds · OK play or pause · Next / Previous track · Back to browse"
+                    },
                     style = Type.sub,
                 )
             }

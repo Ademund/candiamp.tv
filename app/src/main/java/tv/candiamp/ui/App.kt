@@ -35,6 +35,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import tv.candiamp.data.Credentials
 import tv.candiamp.data.MusicLibrary
+import tv.candiamp.data.RadioLibrary
 import tv.candiamp.playback.Playback
 
 sealed interface Screen {
@@ -42,13 +43,15 @@ sealed interface Screen {
     data object Search : Screen
     data object Albums : Screen
     data object Artists : Screen
+    data object Radio : Screen
     data object Settings : Screen
     data class Record(val id: String) : Screen
     data class ArtistPage(val id: String) : Screen
+    data class RadioShow(val id: String) : Screen
 }
 
 @Composable
-fun App(credentials: Credentials, library: MusicLibrary) {
+fun App(credentials: Credentials, library: MusicLibrary, radio: RadioLibrary) {
     var connected by remember { mutableStateOf(credentials.isConfigured) }
     if (!connected) {
         SetupScreen(credentials) { connected = true }
@@ -58,12 +61,21 @@ fun App(credentials: Credentials, library: MusicLibrary) {
     LaunchedEffect(connected) {
         if (library.isStale()) library.sync()
     }
+    // Radio is a scraper and is allowed to fail on its own; it never blocks the collection.
+    LaunchedEffect(connected) {
+        if (radio.isStale()) radio.sync()
+    }
 
-    LibraryShell(credentials, library) { connected = false }
+    LibraryShell(credentials, library, radio) { connected = false }
 }
 
 @Composable
-private fun LibraryShell(credentials: Credentials, library: MusicLibrary, onSignOut: () -> Unit) {
+private fun LibraryShell(
+    credentials: Credentials,
+    library: MusicLibrary,
+    radio: RadioLibrary,
+    onSignOut: () -> Unit,
+) {
     val stack = remember { mutableStateListOf<Screen>(Screen.Home) }
     var showPlayer by remember { mutableStateOf(false) }
     // Detail pages keep the section they were opened from, so the sidebar does not jump to Home.
@@ -73,12 +85,14 @@ private fun LibraryShell(credentials: Credentials, library: MusicLibrary, onSign
 
     CompositionLocalProvider(
         LocalLibrary provides library,
+        LocalRadio provides radio,
         LocalOpenAlbum provides { id -> stack.add(Screen.Record(id)) },
         LocalOpenArtist provides { id -> stack.add(Screen.ArtistPage(id)) },
+        LocalOpenRadioEpisode provides { id -> stack.add(Screen.RadioShow(id)) },
     ) {
         Box(Modifier.fillMaxSize().background(Colors.bg)) {
             Row(Modifier.fillMaxSize()) {
-                Sidebar(current = if (stack.last() is Screen.Record || stack.last() is Screen.ArtistPage) section else stack.last(), onGo = { target ->
+                Sidebar(current = if (stack.last() is Screen.Record || stack.last() is Screen.ArtistPage || stack.last() is Screen.RadioShow) section else stack.last(), onGo = { target ->
                     section = target
                     stack.clear()
                     stack.add(target)
@@ -89,11 +103,13 @@ private fun LibraryShell(credentials: Credentials, library: MusicLibrary, onSign
                         Screen.Search -> SearchScreen()
                         Screen.Albums -> AlbumsScreen()
                         Screen.Artists -> ArtistsScreen()
+                        Screen.Radio -> RadioScreen()
                         Screen.Settings -> SettingsScreen(credentials) {
                             onSignOut()
                         }
                         is Screen.Record -> AlbumDetailScreen(screen.id)
                         is Screen.ArtistPage -> ArtistDetailScreen(screen.id)
+                        is Screen.RadioShow -> RadioEpisodeScreen(screen.id)
                     }
                 }
             }
@@ -114,6 +130,7 @@ private fun Sidebar(current: Screen, onGo: (Screen) -> Unit, onOpenPlayer: () ->
         "Search" to Screen.Search,
         "Records" to Screen.Albums,
         "Artists" to Screen.Artists,
+        "Radio" to Screen.Radio,
         "Settings" to Screen.Settings,
     )
     val playing = Playback.current
@@ -139,6 +156,7 @@ private fun Sidebar(current: Screen, onGo: (Screen) -> Unit, onOpenPlayer: () ->
                 Screen.Search -> current is Screen.Search
                 Screen.Albums -> current is Screen.Albums
                 Screen.Artists -> current is Screen.Artists
+                Screen.Radio -> current is Screen.Radio || current is Screen.RadioShow
                 Screen.Settings -> current is Screen.Settings
                 else -> false
             }

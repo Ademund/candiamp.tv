@@ -152,6 +152,45 @@ object Playback {
         start(context, queue, songs, startIndex, artwork, streamUrl)
     }
 
+    /**
+     * A Bandcamp Radio episode: one long compiled stream rather than a queue. The URL was
+     * resolved by [tv.candiamp.data.RadioLibrary] at play time because it expires.
+     */
+    fun playRadio(
+        context: Context,
+        episodeId: String,
+        title: String,
+        show: String?,
+        audioUrl: String,
+        coverUrl: String?,
+        startAtMs: Long = 0L,
+    ) {
+        val player = player(context)
+        val metadata = MediaMetadata.Builder()
+            .setTitle(title)
+            .setArtist(show ?: "Bandcamp Radio")
+            .setExtras(android.os.Bundle().apply { putString(KEY_ALBUM_ID, RADIO_PREFIX + episodeId) })
+        coverUrl?.let { metadata.setArtworkUri(Uri.parse(it)) }
+        val item = MediaItem.Builder()
+            .setUri(audioUrl)
+            .setMediaId(RADIO_PREFIX + episodeId)
+            .setMediaMetadata(metadata.build())
+            .build()
+        player.setMediaItems(listOf(item), 0, startAtMs.coerceAtLeast(0L))
+        player.prepare()
+        player.playWhenReady = true
+        startTicker()
+        current = NowPlaying(
+            title = title,
+            artist = show.orEmpty(),
+            albumName = null,
+            albumId = RADIO_PREFIX + episodeId,
+            coverUrl = coverUrl,
+            position = 0,
+            total = 1,
+        )
+    }
+
     private fun start(
         context: Context,
         album: Album,
@@ -222,5 +261,17 @@ object Playback {
         syncPosition()
     }
 
+    fun seekToPosition(ms: Long) {
+        exo?.let {
+            val duration = it.duration
+            val upper = if (duration > 0) duration else Long.MAX_VALUE
+            it.seekTo(ms.coerceIn(0L, upper))
+        }
+        syncPosition()
+    }
+
     const val KEY_ALBUM_ID = "albumId"
+
+    /** Now-playing ids starting with this prefix are radio episodes, not records. */
+    const val RADIO_PREFIX = "radio:"
 }
