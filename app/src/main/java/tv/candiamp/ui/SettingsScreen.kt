@@ -17,12 +17,18 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import kotlinx.coroutines.launch
 import tv.candiamp.data.Credentials
+import tv.candiamp.data.LastFmCredentials
 import tv.candiamp.data.SubsonicClient
 import java.text.DateFormat
 import java.util.Date
 
 @Composable
-fun SettingsScreen(credentials: Credentials, onSignOut: () -> Unit) {
+fun SettingsScreen(
+    credentials: Credentials,
+    lastFm: LastFmCredentials,
+    onSignOut: () -> Unit,
+    onOpenLastFm: () -> Unit,
+) {
     val library = LocalLibrary.current
     val scope = rememberCoroutineScope()
     val snapshot = library.snapshot
@@ -63,18 +69,42 @@ fun SettingsScreen(credentials: Credentials, onSignOut: () -> Unit) {
 
         item {
             Column(Modifier.padding(top = 26.dp)) {
+                Text("Last.fm", style = Type.section)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    when {
+                        !lastFm.isConfigured -> "Not configured. Add your Last.fm API key from a phone, then link your account."
+                        lastFm.isLinked -> "Connected as ${lastFm.username}."
+                        else -> "Your API key is set. Link your Last.fm account to finish."
+                    },
+                    style = Type.sub.copy(fontSize = 13.sp, lineHeight = 20.sp),
+                    modifier = Modifier.padding(end = 240.dp),
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Pill(
+                        text = if (lastFm.isConfigured) "Manage Last.fm" else "Set up Last.fm",
+                        onClick = onOpenLastFm,
+                        primary = true,
+                    )
+                }
+            }
+        }
+
+        item {
+            Column(Modifier.padding(top = 26.dp)) {
                 Text("About", style = Type.section)
                 Spacer(Modifier.height(8.dp))
                 Text(
                     "candiamp streams the records you have bought or collected on Bandcamp, using the Subsonic " +
                         "endpoint Bandcamp published in July 2026. It keeps your credentials on this TV, in the " +
-                        "Android keystore, and talks to bandcamp.com directly. No account, no analytics, no server " +
-                        "in between.",
+                        "Android keystore, and talks to bandcamp.com directly. Last.fm is optional and stays off " +
+                        "until you link an account.",
                     style = Type.sub.copy(fontSize = 13.sp, lineHeight = 20.sp),
                     modifier = Modifier.padding(end = 240.dp),
                 )
                 Spacer(Modifier.height(10.dp))
-                Text("Not affiliated with Bandcamp.", style = Type.sub.copy(fontSize = 12.sp))
+                Text("Not affiliated with Bandcamp. Powered by Last.fm when linked.", style = Type.sub.copy(fontSize = 12.sp))
             }
         }
     }

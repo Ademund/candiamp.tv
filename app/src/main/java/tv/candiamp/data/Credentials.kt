@@ -1,14 +1,6 @@
 package tv.candiamp.data
 
 import android.content.Context
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
-import android.util.Base64
-import java.security.KeyStore
-import javax.crypto.Cipher
-import javax.crypto.KeyGenerator
-import javax.crypto.SecretKey
-import javax.crypto.spec.GCMParameterSpec
 
 /**
  * Where the pairing page puts what you typed on your phone. The password lives in the Android
@@ -33,10 +25,10 @@ class Credentials(context: Context) {
         }
 
     var password: String?
-        get() = prefs.getString("password", null)?.let { decrypt(it) }
+        get() = prefs.getString("password", null)?.let { KeystoreCrypto.decrypt(ALIAS, it) }
         set(value) {
             if (value == null) prefs.edit().remove("password").apply()
-            else prefs.edit().putString("password", encrypt(value)).apply()
+            else prefs.edit().putString("password", KeystoreCrypto.encrypt(ALIAS, value)).apply()
         }
 
     /**
@@ -74,39 +66,8 @@ class Credentials(context: Context) {
         prefs.edit().remove("server").remove("user").remove("password").apply()
     }
 
-    private fun encrypt(plain: String): String {
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.ENCRYPT_MODE, key())
-        val bytes = cipher.iv + cipher.doFinal(plain.toByteArray(Charsets.UTF_8))
-        return Base64.encodeToString(bytes, Base64.NO_WRAP)
-    }
-
-    private fun decrypt(stored: String): String? = runCatching {
-        val bytes = Base64.decode(stored, Base64.NO_WRAP)
-        val iv = bytes.copyOfRange(0, 12)
-        val body = bytes.copyOfRange(12, bytes.size)
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, iv))
-        String(cipher.doFinal(body), Charsets.UTF_8)
-    }.getOrNull()
-
-    private fun key(): SecretKey {
-        val store = KeyStore.getInstance(KEYSTORE).apply { load(null) }
-        (store.getEntry(ALIAS, null) as? KeyStore.SecretKeyEntry)?.let { return it.secretKey }
-        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE)
-        generator.init(
-            KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                .build(),
-        )
-        return generator.generateKey()
-    }
-
     companion object {
-        private const val KEYSTORE = "AndroidKeyStore"
         private const val ALIAS = "candiamp-password"
-        private const val TRANSFORMATION = "AES/GCM/NoPadding"
 
         fun randomSalt(): String {
             val alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
