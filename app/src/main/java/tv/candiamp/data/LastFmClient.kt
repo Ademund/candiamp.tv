@@ -20,7 +20,17 @@ class LastFmException(message: String, val code: Int? = null) : Exception(messag
 
 data class LastFmSession(val username: String, val key: String)
 
-data class LastFmUser(val username: String, val playcount: Long)
+data class LastFmUser(
+    val username: String,
+    val playcount: Long,
+    val realName: String? = null,
+    val imageUrl: String? = null,
+    val url: String? = null,
+    val artistCount: Int = 0,
+    val trackCount: Int = 0,
+    val albumCount: Int = 0,
+    val registeredAt: Long? = null,
+)
 
 /**
  * A small Last.fm client.
@@ -74,6 +84,35 @@ class LastFmClient(
         require(entries.isNotEmpty()) { "Nothing to scrobble" }
         return parseScrobbles(call("track.scrobble", scrobbleParams(entries), authenticated = true))
     }
+
+    fun topArtists(user: String, period: String, limit: Int = 10): List<LastFmArtist> =
+        parseTopArtists(
+            call(
+                "user.getTopArtists",
+                listOf("user" to user, "period" to period, "limit" to limit.toString()),
+            ),
+        )
+
+    fun topAlbums(user: String, period: String, limit: Int = 10): List<LastFmAlbum> =
+        parseTopAlbums(
+            call(
+                "user.getTopAlbums",
+                listOf("user" to user, "period" to period, "limit" to limit.toString()),
+            ),
+        )
+
+    fun topTracks(user: String, period: String, limit: Int = 10): List<LastFmTrack> =
+        parseTopTracks(
+            call(
+                "user.getTopTracks",
+                listOf("user" to user, "period" to period, "limit" to limit.toString()),
+            ),
+        )
+
+    fun recentTracks(user: String, limit: Int = 20): List<LastFmRecentTrack> =
+        parseRecentTracks(
+            call("user.getRecentTracks", listOf("user" to user, "limit" to limit.toString())),
+        )
 
     internal fun call(
         method: String,
@@ -177,6 +216,13 @@ internal fun parseUser(root: JsonObject): LastFmUser {
     return LastFmUser(
         username = user.text("name").orEmpty(),
         playcount = user.long("playcount") ?: 0L,
+        realName = user.text("realname")?.takeIf { it.isNotBlank() },
+        imageUrl = user.lastFmImage(),
+        url = user.text("url"),
+        artistCount = user.int("artist_count") ?: 0,
+        trackCount = user.int("track_count") ?: 0,
+        albumCount = user.int("album_count") ?: 0,
+        registeredAt = user.obj("registered")?.long("unixtime"),
     )
 }
 
