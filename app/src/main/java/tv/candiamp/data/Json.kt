@@ -18,6 +18,7 @@ fun JsonObject.text(key: String): String? {
 
 fun JsonObject.int(key: String): Int? = text(key)?.toIntOrNull()
 fun JsonObject.long(key: String): Long? = text(key)?.toLongOrNull()
+fun JsonObject.double(key: String): Double? = text(key)?.toDoubleOrNull()
 fun JsonObject.obj(key: String): JsonObject? = this[key] as? JsonObject
 
 /**

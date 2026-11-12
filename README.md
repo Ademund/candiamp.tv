@@ -17,6 +17,7 @@ Working, on a TCL Google TV (Android 14, `G08_4K_GB`), sideloaded. Built as a pr
 | TV remote | OK / play-pause / next / previous / 10-second seek |
 | Background audio | Keeps playing when you leave the app (`MediaSession`) |
 | Pairing from a phone | Local HTTP page served by the TV itself |
+| Radio | Scraped from `bandcamp.com/radio`; whole episode as one stream, timestamped tracklist |
 | Sync | ~4 s for 17 records / 190 tracks, library cached as JSON with a schema version |
 
 | Missing, and why |
@@ -78,14 +79,22 @@ Bandcamp's Subsonic endpoint sends **no CORS headers** — not on the response, 
 
 A WebView around bandcamp.com is the other road, and it is a dead end on a TV: no tvOS browser at all, no Roku browser, no focus order for a D-pad, and no media session.
 
-## Radio — surveyed, not built
+## Radio — scraped, because the API has none
 
-There is no radio in the API: `getInternetRadioStations` exists but returns an empty station list, so Bandcamp Radio is not exposed the way the collection is. The website is scrapeable though, and its shape is unusually friendly:
+There is no radio in the API: `getInternetRadioStations` exists but returns an empty station list, so Bandcamp Radio is not exposed the way the collection is. The website is scrapeable though, and its shape is friendly:
 
-- `/radio` lists the shows (`/radio/<franchise>/<episode>`).
-- Each episode page carries a `data-blob` attribute holding JSON with `compiledTrack { streamUrl, duration }` — the whole episode as one signed MP3 (≈90 min) — plus `tracks[]` where each entry has `album`, `title`, `duration`, `timecode` and its own `streamUrl`, and `tracksSummary { totalCount, totalDuration }`.
+- `/radio` carries `data-blob` JSON with `appData.shows[]`: `itemUrl`, `title`, `franchiseName`, `date`, `description`, `imageId`. Cover art is `https://f4.bcbits.com/img/<imageId>_170.jpg`.
+- Each `/radio/<franchise>/<episode>` page carries `appData.show` with `compiledTrack { streamUrl, duration }` — the whole episode as one signed MP3 (≈90 min) — plus `tracks[]` where each entry has `album { title }`, `title`, `artistName`, `duration`, `timecode`, and `tracksSummary { totalCount, totalDuration }`.
 
-That is enough for a proper TV radio screen: one long stream, and the timestamped tracklist can drive a "now playing inside this show" line. It is a scraper, so it stays a separate source behind the same seam as `MusicLibrary`, and every URL is resolved when playback starts.
+What the app does with it:
+
+- **Radio** in the sidebar lists the current episodes. The index does not carry episode durations; a duration appears once that episode has been opened and cached.
+- Opening an episode plays the compiled stream through the same `Playback`/`MediaSession` path as everything else: one media item, remote play/pause and 10-second seek work, and audio keeps going when you leave the app.
+- The episode page shows the timestamped tracklist. The current track is highlighted from `Playback.positionMs`, with a "You're hearing …" line. Selecting any track starts the episode at its timecode (or seeks, if it is already playing).
+- The index and each parsed episode are cached on disk. A changed page shape produces a readable error on the Radio screen and never affects collection playback. **Signed URLs are never written to the cache** — they carry `ts`/`t` — so they are re-resolved at play time and kept in memory for ten minutes.
+- Radio audio is `mp3-128`; owned collection streams are `mp3-v0` (~256 kbps).
+
+This is a scraper, not an API: the HTML can change without notice. `data/BandcampRadio.kt` holds both the fetch and the parse, `data/RadioLibrary.kt` holds the cache and the URL policy, and `BandcampRadioTest` pins the field names measured in November 2026.
 
 ## API notes (measured, 2026-11)
 
@@ -118,12 +127,14 @@ Other quirks: no `discNumber` (long albums flatten to `track` 1..N), no `year` o
 ```
 data/SubsonicClient.kt   auth, the four error shapes, endpoint parsing
 data/MusicLibrary.kt     sync (artists + album cards), track lists on demand, JSON cache
+data/BandcampRadio.kt    the radio scraper: index + data-blob episode parsing
+data/RadioLibrary.kt     radio index/episode cache; signed stream URLs stay in memory
 data/Credentials.kt      server/user in prefs, password sealed with the Android keystore
 playback/Playback.kt     one ExoPlayer + MediaSession for the app, stream URLs resolved at play time
 pairing/PairingServer.kt a ~200-line local HTTP server serving the setup form
-ui/                      Compose for TV: sidebar, rows, record page, player, settings
+ui/                      Compose for TV: sidebar, rows, record page, radio, player, settings
 ```
 
-`MusicSource` seam: everything the UI needs is `MusicLibrary`. When the Discover scraper arrives it slots in behind the same calls, and a future web build would need a proxy, not a rewrite.
+`MusicSource` seam: everything the UI needs for the collection is `MusicLibrary`. Radio deliberately sits beside it as its own `RadioLibrary`, because it is scraped and must be able to fail without touching collection playback. A future web build would need a proxy, not a rewrite.
 
 ## Not affiliated with Bandcamp

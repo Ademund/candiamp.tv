@@ -28,7 +28,7 @@ import tv.candiamp.data.Album
 import tv.candiamp.data.runtime
 import tv.candiamp.playback.Playback
 
-private val pagePadding = PaddingValues(start = 28.dp, end = 24.dp, top = 16.dp, bottom = 160.dp)
+internal val pagePadding = PaddingValues(start = 28.dp, end = 24.dp, top = 16.dp, bottom = 160.dp)
 
 @Composable
 fun HomeScreen() {

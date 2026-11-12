@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import tv.candiamp.data.Credentials
 import tv.candiamp.data.MusicLibrary
+import tv.candiamp.data.RadioLibrary
 import tv.candiamp.playback.Playback
 import tv.candiamp.ui.App
 import tv.candiamp.ui.CandiampTheme
@@ -16,9 +17,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val credentials = Credentials(this)
         val library = MusicLibrary(this, credentials)
+        val radio = RadioLibrary(this)
         Playback.player(this)
         setContent {
-            CandiampTheme { App(credentials, library) }
+            CandiampTheme { App(credentials, library, radio) }
         }
     }
 
