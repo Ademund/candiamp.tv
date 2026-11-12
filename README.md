@@ -1,6 +1,6 @@
 # candiamp.tv
 
-Your Bandcamp collection, on the TV. An unofficial Android TV client for the **Subsonic endpoint Bandcamp shipped in July 2026** — no scraper, no server in the middle, no account.
+Your Bandcamp collection, on the TV. An unofficial Android TV client for the **Subsonic endpoint Bandcamp shipped in July 2026** — no server in the middle, no Bandcamp account. Radio is the one scraped exception; Last.fm is optional.
 
 ![Home](docs/02-home.png)
 
@@ -18,6 +18,7 @@ Working, on a TCL Google TV (Android 14, `G08_4K_GB`), sideloaded. Built as a pr
 | Background audio | Keeps playing when you leave the app (`MediaSession`) |
 | Pairing from a phone | Local HTTP page served by the TV itself |
 | Radio | Scraped from `bandcamp.com/radio`; whole episode as one stream, timestamped tracklist |
+| Last.fm | Account linking from a phone; scrobbling and stats are the next PRs (#5) |
 | Sync | ~4 s for 17 records / 190 tracks, library cached as JSON with a schema version |
 
 | Missing, and why |
@@ -61,6 +62,16 @@ The pairing code is also written to logcat for development:
 ```sh
 adb logcat -s candiamp
 ```
+
+## Last.fm (linking is in; scrobbling is next)
+
+Last.fm support is opt-in. The TV needs the API key and shared secret from a Last.fm API account, and they are entered from a phone rather than with a remote:
+
+1. Create an API account at `last.fm/api/account/create` and set its callback URL to `https://candiamp.tv/lastfm`. The callback is never reached — the TV completes the flow by polling `auth.getSession`.
+2. On the TV: **Settings → Set up Last.fm**. It shows a LAN address such as `http://192.168.1.20:8080` and a four-character code.
+3. On the phone, open that address, paste the API key and shared secret, then authorize candiamp on Last.fm.
+
+The API key stays in preferences; the shared secret and the session key are sealed with the Android keystore. The setup page only runs while that screen is open. Nothing is sent to Last.fm until an account is linked. This PR adds linking; scrobbling and stats follow in the next PRs on #5.
 
 ## Screens
 
@@ -129,9 +140,13 @@ data/SubsonicClient.kt   auth, the four error shapes, endpoint parsing
 data/MusicLibrary.kt     sync (artists + album cards), track lists on demand, JSON cache
 data/BandcampRadio.kt    the radio scraper: index + data-blob episode parsing
 data/RadioLibrary.kt     radio index/episode cache; signed stream URLs stay in memory
+data/LastFmClient.kt     Last.fm signing, auth calls and error codes
+data/LastFmCredentials.kt Last.fm API key, sealed secret and session key
+data/KeystoreCrypto.kt   AES-GCM helper for values held by the Android keystore
 data/Credentials.kt      server/user in prefs, password sealed with the Android keystore
 playback/Playback.kt     one ExoPlayer + MediaSession for the app, stream URLs resolved at play time
 pairing/PairingServer.kt a ~200-line local HTTP server serving the setup form
+pairing/LastFmServer.kt  the LAN page that collects the Last.fm key and links the account
 ui/                      Compose for TV: sidebar, rows, record page, radio, player, settings
 ```
 

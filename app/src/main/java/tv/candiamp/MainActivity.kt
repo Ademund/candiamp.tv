@@ -5,6 +5,7 @@ import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import tv.candiamp.data.Credentials
+import tv.candiamp.data.LastFmCredentials
 import tv.candiamp.data.MusicLibrary
 import tv.candiamp.data.RadioLibrary
 import tv.candiamp.playback.Playback
@@ -18,9 +19,10 @@ class MainActivity : ComponentActivity() {
         val credentials = Credentials(this)
         val library = MusicLibrary(this, credentials)
         val radio = RadioLibrary(this)
+        val lastFm = LastFmCredentials(this)
         Playback.player(this)
         setContent {
-            CandiampTheme { App(credentials, library, radio) }
+            CandiampTheme { App(credentials, library, radio, lastFm) }
         }
     }
 

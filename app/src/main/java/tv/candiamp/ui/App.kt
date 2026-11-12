@@ -34,6 +34,7 @@ import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import tv.candiamp.data.Credentials
+import tv.candiamp.data.LastFmCredentials
 import tv.candiamp.data.MusicLibrary
 import tv.candiamp.data.RadioLibrary
 import tv.candiamp.playback.Playback
@@ -45,13 +46,14 @@ sealed interface Screen {
     data object Artists : Screen
     data object Radio : Screen
     data object Settings : Screen
+    data object LastFmSetup : Screen
     data class Record(val id: String) : Screen
     data class ArtistPage(val id: String) : Screen
     data class RadioShow(val id: String) : Screen
 }
 
 @Composable
-fun App(credentials: Credentials, library: MusicLibrary, radio: RadioLibrary) {
+fun App(credentials: Credentials, library: MusicLibrary, radio: RadioLibrary, lastFm: LastFmCredentials) {
     var connected by remember { mutableStateOf(credentials.isConfigured) }
     if (!connected) {
         SetupScreen(credentials) { connected = true }
@@ -66,7 +68,7 @@ fun App(credentials: Credentials, library: MusicLibrary, radio: RadioLibrary) {
         if (radio.isStale()) radio.sync()
     }
 
-    LibraryShell(credentials, library, radio) { connected = false }
+    LibraryShell(credentials, library, radio, lastFm) { connected = false }
 }
 
 @Composable
@@ -74,6 +76,7 @@ private fun LibraryShell(
     credentials: Credentials,
     library: MusicLibrary,
     radio: RadioLibrary,
+    lastFm: LastFmCredentials,
     onSignOut: () -> Unit,
 ) {
     val stack = remember { mutableStateListOf<Screen>(Screen.Home) }
@@ -104,9 +107,13 @@ private fun LibraryShell(
                         Screen.Albums -> AlbumsScreen()
                         Screen.Artists -> ArtistsScreen()
                         Screen.Radio -> RadioScreen()
-                        Screen.Settings -> SettingsScreen(credentials) {
-                            onSignOut()
-                        }
+                        Screen.Settings -> SettingsScreen(
+                            credentials = credentials,
+                            lastFm = lastFm,
+                            onSignOut = { onSignOut() },
+                            onOpenLastFm = { stack.add(Screen.LastFmSetup) },
+                        )
+                        Screen.LastFmSetup -> LastFmSetupScreen(lastFm) { stack.removeAt(stack.lastIndex) }
                         is Screen.Record -> AlbumDetailScreen(screen.id)
                         is Screen.ArtistPage -> ArtistDetailScreen(screen.id)
                         is Screen.RadioShow -> RadioEpisodeScreen(screen.id)
@@ -157,7 +164,7 @@ private fun Sidebar(current: Screen, onGo: (Screen) -> Unit, onOpenPlayer: () ->
                 Screen.Albums -> current is Screen.Albums
                 Screen.Artists -> current is Screen.Artists
                 Screen.Radio -> current is Screen.Radio || current is Screen.RadioShow
-                Screen.Settings -> current is Screen.Settings
+                Screen.Settings -> current is Screen.Settings || current is Screen.LastFmSetup
                 else -> false
             }
             SidebarItem(
