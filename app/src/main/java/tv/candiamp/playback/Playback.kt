@@ -2,6 +2,7 @@ package tv.candiamp.playback
 
 import android.content.Context
 import android.net.Uri
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -20,7 +21,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import tv.candiamp.data.Album
+import tv.candiamp.data.RadioTrack
 import tv.candiamp.data.Song
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * One player for the whole app, over the process lifetime, so a record keeps playing while the
@@ -38,12 +41,42 @@ object Playback {
         val total: Int,
     )
 
+    /**
+     * The track the scrobbler cares about. For a record or queue this is the media item; for radio
+     * it is the song inside the episode, derived from the timestamped tracklist.
+     */
+    data class TrackInfo(
+        val id: String,
+        val title: String,
+        val artist: String,
+        val album: String?,
+        val trackNumber: Int?,
+        val durationSec: Int,
+        val chosenByUser: Boolean,
+        val radio: Boolean,
+        /** Wall-clock UNIX seconds when this track started, used as the scrobble timestamp. */
+        val startedAtSec: Long,
+    )
+
+    interface Listener {
+        fun onTrackChanged(track: TrackInfo?)
+        fun onTick(positionMs: Long, durationMs: Long, playing: Boolean)
+    }
+
     private var exo: ExoPlayer? = null
     private var session: MediaSession? = null
     private var ticker: Job? = null
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private val listeners = CopyOnWriteArrayList<Listener>()
+
+    private var radioTracks: List<RadioTrack>? = null
+    private var radioEpisodeId: String? = null
+    private var radioShow: String? = null
+    private var radioIndex = -1
 
     var current by mutableStateOf<NowPlaying?>(null)
+        private set
+    var track by mutableStateOf<TrackInfo?>(null)
         private set
     var playing by mutableStateOf(false)
         private set
@@ -54,6 +87,36 @@ object Playback {
 
     val hasNext: Boolean get() = exo?.hasNextMediaItem() == true
     val hasPrevious: Boolean get() = exo?.hasPreviousMediaItem() == true
+
+    val currentTrack: TrackInfo? get() = track
+
+    fun addListener(listener: Listener) {
+        if (!listeners.contains(listener)) listeners.add(listener)
+    }
+
+    fun removeListener(listener: Listener) {
+        listeners.remove(listener)
+    }
+
+    private fun notifyTrack() {
+        val value = track
+        listeners.toList().forEach { it.onTrackChanged(value) }
+    }
+
+    private fun notifyTick() {
+        val position = positionMs
+        val duration = durationMs
+        val isPlaying = playing
+        listeners.toList().forEach { it.onTick(position, duration, isPlaying) }
+    }
+
+    private fun nowSec(): Long = System.currentTimeMillis() / 1000L
+
+    private fun updateTrack(value: TrackInfo?) {
+        if (track?.id == value?.id) return
+        track = value
+        notifyTrack()
+    }
 
     fun player(context: Context): ExoPlayer {
         exo?.let { return it }
@@ -77,6 +140,10 @@ object Playback {
             override fun onPlaybackStateChanged(state: Int) {
                 durationMs = player.duration.coerceAtLeast(0L)
                 if (player.isPlaying) startTicker()
+                if (state == Player.STATE_ENDED) {
+                    // Give the scrobbler a final tick so the last track can be evaluated.
+                    syncPosition()
+                }
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -92,6 +159,8 @@ object Playback {
         exo?.let {
             positionMs = it.currentPosition.coerceAtLeast(0L)
             durationMs = it.duration.coerceAtLeast(0L)
+            if (radioTracks != null) updateRadioTrack(positionMs)
+            notifyTick()
         }
     }
 
@@ -121,6 +190,46 @@ object Playback {
             coverUrl = meta.artworkUri?.toString(),
             position = player.currentMediaItemIndex,
             total = player.mediaItemCount,
+        )
+        if (item.mediaId.startsWith(RADIO_PREFIX)) {
+            // An episode is one media item; the scrobbler track comes from its tracklist.
+            return
+        }
+        updateTrack(
+            TrackInfo(
+                id = item.mediaId,
+                title = meta.title?.toString().orEmpty(),
+                artist = meta.artist?.toString().orEmpty(),
+                album = meta.albumTitle?.toString(),
+                trackNumber = meta.trackNumber,
+                durationSec = ((meta.durationMs ?: 0L) / 1000L).toInt().coerceAtLeast(0),
+                chosenByUser = true,
+                radio = false,
+                startedAtSec = nowSec(),
+            ),
+        )
+    }
+
+    private fun updateRadioTrack(positionMs: Long) {
+        val list = radioTracks ?: return
+        val index = radioTrackIndex(list, positionMs)
+        if (index < 0 || (index == radioIndex && track != null)) return
+        radioIndex = index
+        val item = list[index]
+        val intoTrackMs = (positionMs - item.timecodeSec * 1000L).coerceAtLeast(0L)
+        val now = nowSec()
+        updateTrack(
+            TrackInfo(
+                id = "$RADIO_PREFIX${radioEpisodeId.orEmpty()}:${item.id.ifBlank { item.timecodeSec }}",
+                title = item.title,
+                artist = item.artistName?.takeIf { it.isNotBlank() } ?: radioShow ?: "Bandcamp Radio",
+                album = item.albumTitle,
+                trackNumber = null,
+                durationSec = item.durationSec,
+                chosenByUser = false,
+                radio = true,
+                startedAtSec = (now - intoTrackMs / 1000L).coerceAtMost(now),
+            ),
         )
     }
 
@@ -164,8 +273,14 @@ object Playback {
         audioUrl: String,
         coverUrl: String?,
         startAtMs: Long = 0L,
+        tracks: List<RadioTrack> = emptyList(),
     ) {
         val player = player(context)
+        radioTracks = tracks
+        radioEpisodeId = episodeId
+        radioShow = show
+        radioIndex = -1
+        updateTrack(null)
         val metadata = MediaMetadata.Builder()
             .setTitle(title)
             .setArtist(show ?: "Bandcamp Radio")
@@ -189,6 +304,7 @@ object Playback {
             position = 0,
             total = 1,
         )
+        updateRadioTrack(startAtMs.coerceAtLeast(0L))
     }
 
     private fun start(
@@ -201,13 +317,21 @@ object Playback {
     ) {
         if (songs.isEmpty()) return
         val player = player(context)
-        val items = songs.mapNotNull { song ->
-            val url = streamUrl(song) ?: return@mapNotNull null
+        radioTracks = null
+        radioEpisodeId = null
+        radioShow = null
+        radioIndex = -1
+        val playable = songs.mapNotNull { song ->
+            streamUrl(song)?.let { url -> song to url }
+        }
+        if (playable.isEmpty()) return
+        val items = playable.map { (song, url) ->
             val meta = MediaMetadata.Builder()
                 .setTitle(song.title)
                 .setArtist(song.artistName ?: album.artist)
                 .setAlbumTitle(song.albumName ?: album.name)
                 .setTrackNumber(song.track)
+                .setDurationMs(song.durationSec * 1000L)
                 .setExtras(android.os.Bundle().apply { putString(KEY_ALBUM_ID, album.id) })
             artwork(song)?.let { meta.setArtworkUri(Uri.parse(it)) }
             MediaItem.Builder()
@@ -216,13 +340,12 @@ object Playback {
                 .setMediaMetadata(meta.build())
                 .build()
         }
-        if (items.isEmpty()) return
         val index = startIndex.coerceIn(0, items.lastIndex)
         player.setMediaItems(items, index, 0L)
         player.prepare()
         player.playWhenReady = true
         startTicker()
-        val first = songs[startIndex.coerceIn(0, songs.lastIndex)]
+        val first = playable[index].first
         current = NowPlaying(
             title = first.title,
             artist = first.artistName ?: album.artist.orEmpty(),
@@ -230,7 +353,20 @@ object Playback {
             albumId = album.id,
             coverUrl = artwork(first),
             position = index,
-            total = songs.size,
+            total = playable.size,
+        )
+        updateTrack(
+            TrackInfo(
+                id = first.id,
+                title = first.title,
+                artist = first.artistName ?: album.artist.orEmpty(),
+                album = first.albumName ?: album.name,
+                trackNumber = first.track,
+                durationSec = first.durationSec,
+                chosenByUser = true,
+                radio = false,
+                startedAtSec = nowSec(),
+            ),
         )
     }
 
@@ -274,4 +410,11 @@ object Playback {
 
     /** Now-playing ids starting with this prefix are radio episodes, not records. */
     const val RADIO_PREFIX = "radio:"
+}
+
+/** The episode track whose timecode is at or before [positionMs]; the first track before its start. */
+internal fun radioTrackIndex(tracks: List<RadioTrack>, positionMs: Long): Int {
+    if (tracks.isEmpty()) return -1
+    val seconds = (positionMs / 1000L).toInt()
+    return tracks.indexOfLast { it.timecodeSec <= seconds }.coerceAtLeast(0)
 }

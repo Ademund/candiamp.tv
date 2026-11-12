@@ -18,7 +18,7 @@ Working, on a TCL Google TV (Android 14, `G08_4K_GB`), sideloaded. Built as a pr
 | Background audio | Keeps playing when you leave the app (`MediaSession`) |
 | Pairing from a phone | Local HTTP page served by the TV itself |
 | Radio | Scraped from `bandcamp.com/radio`; whole episode as one stream, timestamped tracklist |
-| Last.fm | Account linking from a phone; scrobbling and stats are the next PRs (#5) |
+| Last.fm | Account linking, now-playing, scrobbling with a durable queue; stats next (#5) |
 | Sync | ~4 s for 17 records / 190 tracks, library cached as JSON with a schema version |
 
 | Missing, and why |
@@ -71,7 +71,17 @@ Last.fm support is opt-in. The TV needs the API key and shared secret from a Las
 2. On the TV: **Settings → Set up Last.fm**. It shows a LAN address such as `http://192.168.1.20:8080` and a four-character code.
 3. On the phone, open that address, paste the API key and shared secret, then authorize candiamp on Last.fm.
 
-The API key stays in preferences; the shared secret and the session key are sealed with the Android keystore. The setup page only runs while that screen is open. Nothing is sent to Last.fm until an account is linked. This PR adds linking; scrobbling and stats follow in the next PRs on #5.
+The API key stays in preferences; the shared secret and the session key are sealed with the Android keystore. The setup page only runs while that screen is open. Nothing is sent to Last.fm until an account is linked.
+
+Once linked, **scrobbling is on** and can be turned off from Settings:
+
+- Now-playing is sent when a track starts.
+- A play is scrobbled once it is longer than 30 seconds and has been listened to for half its length or four minutes, whichever comes first. Seeking does not fake listening time; a scrobble is queued the moment the threshold is met, not at the end of the track.
+- The queue is a JSON file in app-private storage and is written before sending. Entries older than 13 days are dropped (Last.fm rejects two weeks), and batches go out 50 at a time. Offline plays survive restarts and flush when the network returns.
+- Radio songs are scrobbled from the episode's timestamped tracklist with `chosenByUser=0`, because the host chose them. The episode itself is never scrobbled.
+- Failed writes retry on Last.fm errors 11/16/29; a revoked session (error 9) shows "Reconnect Last.fm" in Settings instead of silently dropping plays.
+
+Metadata comes from Bandcamp (there are no MusicBrainz IDs), so scrobbles match on artist, title and album.
 
 ## Screens
 
@@ -140,8 +150,10 @@ data/SubsonicClient.kt   auth, the four error shapes, endpoint parsing
 data/MusicLibrary.kt     sync (artists + album cards), track lists on demand, JSON cache
 data/BandcampRadio.kt    the radio scraper: index + data-blob episode parsing
 data/RadioLibrary.kt     radio index/episode cache; signed stream URLs stay in memory
-data/LastFmClient.kt     Last.fm signing, auth calls and error codes
+data/LastFmClient.kt     Last.fm signing, auth calls, scrobbling and error codes
 data/LastFmCredentials.kt Last.fm API key, sealed secret and session key
+data/Scrobble.kt         scrobble rules and the durable queue
+data/Scrobbler.kt        playback → now-playing/scrobble orchestration
 data/KeystoreCrypto.kt   AES-GCM helper for values held by the Android keystore
 data/Credentials.kt      server/user in prefs, password sealed with the Android keystore
 playback/Playback.kt     one ExoPlayer + MediaSession for the app, stream URLs resolved at play time

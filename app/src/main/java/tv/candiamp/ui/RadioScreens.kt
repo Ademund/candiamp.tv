@@ -205,6 +205,7 @@ fun RadioEpisodeScreen(episodeId: String) {
                     audioUrl = url,
                     coverUrl = current.artUrl(0),
                     startAtMs = atSec * 1000L,
+                    tracks = current.tracks,
                 )
             } else {
                 error = radio.lastError ?: "Couldn't start this episode."
