@@ -97,4 +97,50 @@ class LastFmClientTest {
             LastFmClient.authUrl("abc", "def"),
         )
     }
+
+    @Test
+    fun `scrobble response parses accepted and ignored counts`() {
+        val result = parseScrobbles(
+            obj("""{"scrobbles":{"@attr":{"accepted":"2","ignored":"1"},"scrobble":[]}}"""),
+        )
+        assertEquals(2, result.accepted)
+        assertEquals(1, result.ignored)
+    }
+
+    @Test
+    fun `a single scrobble uses plain parameter names and keeps optional fields`() {
+        val entry = ScrobbleEntry(
+            artist = "Cher",
+            track = "Believe",
+            album = "Believe",
+            trackNumber = 1,
+            durationSec = 240,
+            timestamp = 1_700_000_000,
+            chosenByUser = false,
+        )
+        val params = LastFmClient.scrobbleParams(listOf(entry)).toMap()
+        assertEquals("Cher", params["artist"])
+        assertEquals("Believe", params["track"])
+        assertEquals("1700000000", params["timestamp"])
+        assertEquals("Believe", params["album"])
+        assertEquals("1", params["trackNumber"])
+        assertEquals("240", params["duration"])
+        assertEquals("0", params["chosenByUser"])
+        assertNull(params["artist[0]"])
+    }
+
+    @Test
+    fun `a batch uses array notation and leaves normal plays as chosen`() {
+        val entries = listOf(
+            ScrobbleEntry(artist = "A", track = "One", timestamp = 1),
+            ScrobbleEntry(artist = "B", track = "Two", timestamp = 2, chosenByUser = false),
+        )
+        val params = LastFmClient.scrobbleParams(entries).toMap()
+        assertEquals("A", params["artist[0]"])
+        assertEquals("One", params["track[0]"])
+        assertEquals("B", params["artist[1]"])
+        assertEquals("2", params["timestamp[1]"])
+        assertEquals("0", params["chosenByUser[1]"])
+        assertNull(params["chosenByUser[0]"])
+    }
 }

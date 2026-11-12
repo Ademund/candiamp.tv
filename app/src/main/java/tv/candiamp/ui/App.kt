@@ -37,6 +37,7 @@ import tv.candiamp.data.Credentials
 import tv.candiamp.data.LastFmCredentials
 import tv.candiamp.data.MusicLibrary
 import tv.candiamp.data.RadioLibrary
+import tv.candiamp.data.Scrobbler
 import tv.candiamp.playback.Playback
 
 sealed interface Screen {
@@ -53,7 +54,13 @@ sealed interface Screen {
 }
 
 @Composable
-fun App(credentials: Credentials, library: MusicLibrary, radio: RadioLibrary, lastFm: LastFmCredentials) {
+fun App(
+    credentials: Credentials,
+    library: MusicLibrary,
+    radio: RadioLibrary,
+    lastFm: LastFmCredentials,
+    scrobbler: Scrobbler,
+) {
     var connected by remember { mutableStateOf(credentials.isConfigured) }
     if (!connected) {
         SetupScreen(credentials) { connected = true }
@@ -68,7 +75,7 @@ fun App(credentials: Credentials, library: MusicLibrary, radio: RadioLibrary, la
         if (radio.isStale()) radio.sync()
     }
 
-    LibraryShell(credentials, library, radio, lastFm) { connected = false }
+    LibraryShell(credentials, library, radio, lastFm, scrobbler) { connected = false }
 }
 
 @Composable
@@ -77,6 +84,7 @@ private fun LibraryShell(
     library: MusicLibrary,
     radio: RadioLibrary,
     lastFm: LastFmCredentials,
+    scrobbler: Scrobbler,
     onSignOut: () -> Unit,
 ) {
     val stack = remember { mutableStateListOf<Screen>(Screen.Home) }
@@ -110,6 +118,7 @@ private fun LibraryShell(
                         Screen.Settings -> SettingsScreen(
                             credentials = credentials,
                             lastFm = lastFm,
+                            scrobbler = scrobbler,
                             onSignOut = { onSignOut() },
                             onOpenLastFm = { stack.add(Screen.LastFmSetup) },
                         )

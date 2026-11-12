@@ -124,6 +124,14 @@ fun LastFmSetupScreen(credentials: LastFmCredentials, onClose: () -> Unit) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 12.dp)) {
                     Pill("Done", onClick = onClose, primary = true, modifier = Modifier.focusRequester(first))
+                    Pill("Reconnect", onClick = {
+                        server.stop()
+                        credentials.clearSession()
+                        linked = false
+                        linkedUser = null
+                        error = null
+                        startServer()
+                    })
                     Pill("Disconnect", onClick = {
                         server.stop()
                         credentials.clearSession()

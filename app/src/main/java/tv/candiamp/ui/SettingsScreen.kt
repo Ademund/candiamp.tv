@@ -18,6 +18,7 @@ import androidx.tv.material3.Text
 import kotlinx.coroutines.launch
 import tv.candiamp.data.Credentials
 import tv.candiamp.data.LastFmCredentials
+import tv.candiamp.data.Scrobbler
 import tv.candiamp.data.SubsonicClient
 import java.text.DateFormat
 import java.util.Date
@@ -26,6 +27,7 @@ import java.util.Date
 fun SettingsScreen(
     credentials: Credentials,
     lastFm: LastFmCredentials,
+    scrobbler: Scrobbler,
     onSignOut: () -> Unit,
     onOpenLastFm: () -> Unit,
 ) {
@@ -80,13 +82,40 @@ fun SettingsScreen(
                     style = Type.sub.copy(fontSize = 13.sp, lineHeight = 20.sp),
                     modifier = Modifier.padding(end = 240.dp),
                 )
+                if (lastFm.isLinked) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        when {
+                            !scrobbler.enabled -> "Scrobbling is off."
+                            scrobbler.pending == 1 -> "1 scrobble waiting."
+                            scrobbler.pending > 1 -> "${scrobbler.pending} scrobbles waiting."
+                            else -> "Scrobbling is on."
+                        },
+                        style = Type.sub.copy(fontSize = 13.sp),
+                    )
+                    scrobbler.lastError?.let { error ->
+                        Text("Last.fm: $error", style = Type.sub.copy(fontSize = 12.sp, color = Colors.accent))
+                    }
+                }
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (lastFm.isLinked) {
+                        Pill(
+                            text = if (scrobbler.enabled) "Turn scrobbling off" else "Turn scrobbling on",
+                            onClick = { scrobbler.setScrobbling(!scrobbler.enabled) },
+                        )
+                    }
                     Pill(
                         text = if (lastFm.isConfigured) "Manage Last.fm" else "Set up Last.fm",
                         onClick = onOpenLastFm,
                         primary = true,
                     )
+                }
+                if (scrobbler.needsReauth) {
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Pill("Reconnect Last.fm", onClick = onOpenLastFm)
+                    }
                 }
             }
         }

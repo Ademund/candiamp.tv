@@ -54,6 +54,27 @@ class LastFmClient(
 
     fun userInfo(): LastFmUser = parseUser(call("user.getInfo", authenticated = true))
 
+    /** Tell Last.fm what is playing. Optional per the docs, and never retried on failure. */
+    fun updateNowPlaying(
+        artist: String,
+        track: String,
+        album: String? = null,
+        trackNumber: Int? = null,
+        durationSec: Int = 0,
+    ) {
+        val params = mutableListOf("artist" to artist, "track" to track)
+        album?.takeIf { it.isNotBlank() }?.let { params += "album" to it }
+        trackNumber?.let { params += "trackNumber" to it.toString() }
+        durationSec.takeIf { it > 0 }?.let { params += "duration" to it.toString() }
+        call("track.updateNowPlaying", params, authenticated = true)
+    }
+
+    /** Send up to 50 plays in one request, oldest first. */
+    fun scrobble(entries: List<ScrobbleEntry>): ScrobbleResult {
+        require(entries.isNotEmpty()) { "Nothing to scrobble" }
+        return parseScrobbles(call("track.scrobble", scrobbleParams(entries), authenticated = true))
+    }
+
     internal fun call(
         method: String,
         params: List<Pair<String, String>> = emptyList(),
@@ -112,6 +133,27 @@ class LastFmClient(
         internal fun authUrl(apiKey: String, token: String): String =
             AUTH_URL + "?api_key=" + encode(apiKey) + "&token=" + encode(token)
 
+        /**
+         * `artist[i]` / `track[i]` / … for batches; plain names for a single scrobble, which the
+         * API also accepts. Parameter names are sorted later when signing.
+         */
+        internal fun scrobbleParams(entries: List<ScrobbleEntry>): List<Pair<String, String>> {
+            val array = entries.size > 1
+            val params = ArrayList<Pair<String, String>>(entries.size * 6)
+            entries.forEachIndexed { index, entry ->
+                fun name(key: String) = if (array) "$key[$index]" else key
+                params += name("artist") to entry.artist
+                params += name("track") to entry.track
+                params += name("timestamp") to entry.timestamp.toString()
+                entry.album?.takeIf { it.isNotBlank() }?.let { params += name("album") to it }
+                entry.albumArtist?.takeIf { it.isNotBlank() }?.let { params += name("albumArtist") to it }
+                entry.trackNumber?.let { params += name("trackNumber") to it.toString() }
+                entry.durationSec?.takeIf { it > 0 }?.let { params += name("duration") to it.toString() }
+                entry.chosenByUser?.let { params += name("chosenByUser") to if (it) "1" else "0" }
+            }
+            return params
+        }
+
         internal fun md5(value: String): String = MessageDigest.getInstance("MD5")
             .digest(value.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
@@ -141,4 +183,13 @@ internal fun parseUser(root: JsonObject): LastFmUser {
 internal fun parseError(root: JsonObject?): LastFmException? {
     val code = root?.int("error") ?: return null
     return LastFmException(root.text("message") ?: "Last.fm error $code.", code)
+}
+
+internal fun parseScrobbles(root: JsonObject): ScrobbleResult {
+    val scrobbles = root.obj("scrobbles") ?: return ScrobbleResult(0, 0)
+    val attributes = scrobbles.obj("@attr")
+    return ScrobbleResult(
+        accepted = attributes?.int("accepted") ?: 0,
+        ignored = attributes?.int("ignored") ?: 0,
+    )
 }
