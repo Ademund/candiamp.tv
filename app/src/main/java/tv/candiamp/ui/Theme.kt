@@ -8,15 +8,15 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.darkColorScheme
 
-/** Bandcamp-ish teal on near-black. */
+/** The logo's candy pink on near-black. */
 object Colors {
     val bg = Color(0xFF0B0B0C)
     val bg2 = Color(0xFF1B1B1F)
     val bg3 = Color(0xFF2E2E34)
     val text = Color(0xFFF1F1F1)
     val muted = Color(0xFF9A9AA2)
-    val accent = Color(0xFF4AA8B8)
-    val accentDark = Color(0xFF08191C)
+    val accent = Color(0xFFFB5EA1)
+    val accentDark = Color(0xFF1B0A12)
 }
 
 object Type {

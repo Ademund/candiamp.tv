@@ -11,6 +11,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import kotlinx.coroutines.CoroutineScope
@@ -63,6 +64,17 @@ object Playback {
         fun onTick(positionMs: Long, durationMs: Long, playing: Boolean)
     }
 
+    /** One row of the queue, as the UI sees it. Media items carry the stream URL; this does not. */
+    data class QueueEntry(
+        val mediaId: String,
+        val title: String,
+        val artist: String,
+        val album: String?,
+        val albumId: String?,
+        val artworkUrl: String?,
+        val durationSec: Int,
+    )
+
     private var exo: ExoPlayer? = null
     private var session: MediaSession? = null
     private var ticker: Job? = null
@@ -83,6 +95,12 @@ object Playback {
     var positionMs by mutableStateOf(0L)
         private set
     var durationMs by mutableStateOf(0L)
+        private set
+
+    /** The whole player timeline, played and upcoming, so the queue screen can show both. */
+    var queue by mutableStateOf<List<QueueEntry>>(emptyList())
+        private set
+    var queueIndex by mutableStateOf(-1)
         private set
 
     val hasNext: Boolean get() = exo?.hasNextMediaItem() == true
@@ -148,6 +166,11 @@ object Playback {
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 mediaItem?.let { read(it, player) }
+                refreshQueue()
+            }
+
+            override fun onTimelineChanged(timeline: Timeline, reason: Int) {
+                refreshQueue()
             }
         })
         session = MediaSession.Builder(context.applicationContext, player).build()
@@ -178,6 +201,37 @@ object Playback {
         ticker?.cancel()
         ticker = null
         syncPosition()
+    }
+
+    private fun refreshQueue() {
+        val player = exo ?: return
+        queue = (0 until player.mediaItemCount).map { queueEntry(player.getMediaItemAt(it)) }
+        queueIndex = if (player.mediaItemCount == 0) -1 else player.currentMediaItemIndex
+    }
+
+    private fun queueEntry(item: MediaItem): QueueEntry {
+        val meta = item.mediaMetadata
+        return QueueEntry(
+            mediaId = item.mediaId,
+            title = meta.title?.toString().orEmpty(),
+            artist = meta.artist?.toString().orEmpty(),
+            album = meta.albumTitle?.toString(),
+            albumId = meta.extras?.getString(KEY_ALBUM_ID),
+            artworkUrl = meta.artworkUri?.toString(),
+            durationSec = ((meta.durationMs ?: 0L) / 1000L).toInt().coerceAtLeast(0),
+        )
+    }
+
+    private fun clearRadioState() {
+        radioTracks = null
+        radioEpisodeId = null
+        radioShow = null
+        radioIndex = -1
+    }
+
+    private fun syncCurrent() {
+        val player = exo ?: return
+        player.currentMediaItem?.let { read(it, player) }
     }
 
     private fun read(item: MediaItem, player: ExoPlayer) {
@@ -252,13 +306,107 @@ object Playback {
     ) {
         if (songs.isEmpty()) return
         val first = songs[startIndex.coerceIn(0, songs.lastIndex)]
-        val queue = Album(
+        val wrapper = Album(
             id = "queue:${first.albumId.orEmpty()}",
             name = first.albumName ?: "Search results",
             artist = first.artistName,
             coverArt = first.coverArt,
         )
-        start(context, queue, songs, startIndex, artwork, streamUrl)
+        start(context, wrapper, songs, startIndex, artwork, streamUrl)
+    }
+
+    /** Appends songs to the end of the queue; starts playback when nothing is queued. */
+    fun enqueue(
+        context: Context,
+        album: Album?,
+        songs: List<Song>,
+        artwork: (Song) -> String?,
+        streamUrl: (Song) -> String?,
+    ) = addToQueue(context, album, songs, afterCurrent = false, artwork, streamUrl)
+
+    /** Inserts songs straight after the current track, keeping the order given. */
+    fun playNext(
+        context: Context,
+        album: Album?,
+        songs: List<Song>,
+        artwork: (Song) -> String?,
+        streamUrl: (Song) -> String?,
+    ) = addToQueue(context, album, songs, afterCurrent = true, artwork, streamUrl)
+
+    private fun addToQueue(
+        context: Context,
+        album: Album?,
+        songs: List<Song>,
+        afterCurrent: Boolean,
+        artwork: (Song) -> String?,
+        streamUrl: (Song) -> String?,
+    ) {
+        if (songs.isEmpty()) return
+        val items = songs.mapNotNull { song ->
+            streamUrl(song)?.let { url -> mediaItem(song, url, album, artwork) }
+        }
+        if (items.isEmpty()) return
+        val player = player(context)
+        // Radio is a single signed stream resolved at play time, so it cannot be queued around:
+        // choosing music while an episode is on replaces the episode.
+        val onRadio = player.currentMediaItem?.mediaId?.startsWith(RADIO_PREFIX) == true
+        if (player.mediaItemCount == 0 || onRadio) {
+            clearRadioState()
+            player.setMediaItems(items, 0, 0L)
+            player.prepare()
+            player.playWhenReady = true
+            startTicker()
+            read(items.first(), player)
+        } else {
+            player.addMediaItems(
+                insertionIndex(player.currentMediaItemIndex, player.mediaItemCount, afterCurrent),
+                items,
+            )
+            syncCurrent()
+        }
+        refreshQueue()
+    }
+
+    /** Moves a queue row; [to] is its final index. */
+    fun moveQueueItem(from: Int, to: Int) {
+        val player = exo ?: return
+        if (from == to) return
+        if (from !in 0 until player.mediaItemCount || to !in 0 until player.mediaItemCount) return
+        player.moveMediaItem(from, to)
+        syncCurrent()
+        refreshQueue()
+    }
+
+    /** Removes a queue row. Removing what is playing moves on to the next track. */
+    fun removeQueueItem(index: Int) {
+        val player = exo ?: return
+        if (index !in 0 until player.mediaItemCount) return
+        player.removeMediaItem(index)
+        if (player.mediaItemCount == 0) {
+            clearRadioState()
+            ticker?.cancel()
+            ticker = null
+            playing = false
+            positionMs = 0L
+            durationMs = 0L
+            updateTrack(null)
+            current = null
+            notifyTick()
+        } else {
+            syncCurrent()
+        }
+        refreshQueue()
+    }
+
+    /** Plays the queue row at [index] from the beginning. */
+    fun jumpTo(index: Int) {
+        val player = exo ?: return
+        if (index !in 0 until player.mediaItemCount) return
+        player.seekToDefaultPosition(index)
+        player.playWhenReady = true
+        startTicker()
+        syncCurrent()
+        refreshQueue()
     }
 
     /**
@@ -295,6 +443,7 @@ object Playback {
         player.prepare()
         player.playWhenReady = true
         startTicker()
+        refreshQueue()
         current = NowPlaying(
             title = title,
             artist = show.orEmpty(),
@@ -317,34 +466,18 @@ object Playback {
     ) {
         if (songs.isEmpty()) return
         val player = player(context)
-        radioTracks = null
-        radioEpisodeId = null
-        radioShow = null
-        radioIndex = -1
+        clearRadioState()
         val playable = songs.mapNotNull { song ->
             streamUrl(song)?.let { url -> song to url }
         }
         if (playable.isEmpty()) return
-        val items = playable.map { (song, url) ->
-            val meta = MediaMetadata.Builder()
-                .setTitle(song.title)
-                .setArtist(song.artistName ?: album.artist)
-                .setAlbumTitle(song.albumName ?: album.name)
-                .setTrackNumber(song.track)
-                .setDurationMs(song.durationSec * 1000L)
-                .setExtras(android.os.Bundle().apply { putString(KEY_ALBUM_ID, album.id) })
-            artwork(song)?.let { meta.setArtworkUri(Uri.parse(it)) }
-            MediaItem.Builder()
-                .setUri(url)
-                .setMediaId(song.id)
-                .setMediaMetadata(meta.build())
-                .build()
-        }
+        val items = playable.map { (song, url) -> mediaItem(song, url, album, artwork) }
         val index = startIndex.coerceIn(0, items.lastIndex)
         player.setMediaItems(items, index, 0L)
         player.prepare()
         player.playWhenReady = true
         startTicker()
+        refreshQueue()
         val first = playable[index].first
         current = NowPlaying(
             title = first.title,
@@ -410,6 +543,23 @@ object Playback {
 
     /** Now-playing ids starting with this prefix are radio episodes, not records. */
     const val RADIO_PREFIX = "radio:"
+
+    private fun mediaItem(song: Song, url: String, album: Album?, artwork: (Song) -> String?): MediaItem {
+        val albumId = album?.id ?: song.albumId
+        val meta = MediaMetadata.Builder()
+            .setTitle(song.title)
+            .setArtist(song.artistName ?: album?.artist)
+            .setAlbumTitle(song.albumName ?: album?.name)
+            .setTrackNumber(song.track)
+            .setDurationMs(song.durationSec * 1000L)
+            .setExtras(android.os.Bundle().apply { if (albumId != null) putString(KEY_ALBUM_ID, albumId) })
+        artwork(song)?.let { meta.setArtworkUri(Uri.parse(it)) }
+        return MediaItem.Builder()
+            .setUri(url)
+            .setMediaId(song.id)
+            .setMediaMetadata(meta.build())
+            .build()
+    }
 }
 
 /** The episode track whose timecode is at or before [positionMs]; the first track before its start. */
@@ -417,4 +567,14 @@ internal fun radioTrackIndex(tracks: List<RadioTrack>, positionMs: Long): Int {
     if (tracks.isEmpty()) return -1
     val seconds = (positionMs / 1000L).toInt()
     return tracks.indexOfLast { it.timecodeSec <= seconds }.coerceAtLeast(0)
+}
+
+/**
+ * Where additions land: straight after the current track for "play next", at the end for "add to
+ * queue", and at zero when there is no queue yet.
+ */
+internal fun insertionIndex(currentIndex: Int, count: Int, afterCurrent: Boolean): Int = when {
+    count <= 0 -> 0
+    afterCurrent -> (currentIndex + 1).coerceIn(0, count)
+    else -> count
 }
