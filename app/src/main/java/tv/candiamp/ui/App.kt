@@ -112,11 +112,16 @@ private fun LibraryShell(
     ) {
         Box(Modifier.fillMaxSize().background(Colors.bg)) {
             Row(Modifier.fillMaxSize()) {
-                Sidebar(current = if (stack.last() is Screen.Record || stack.last() is Screen.ArtistPage || stack.last() is Screen.RadioShow) section else stack.last(), onGo = { target ->
-                    section = target
-                    stack.clear()
-                    stack.add(target)
-                }, onOpenPlayer = { showPlayer = true })
+                val currentScreen = stack.last()
+                val showingSection = currentScreen is Screen.Record || currentScreen is Screen.ArtistPage || currentScreen is Screen.RadioShow
+                Sidebar(
+                    current = if (showingSection) section else currentScreen,
+                    onGo = { target ->
+                        section = target
+                        stack.clear()
+                        stack.add(target)
+                    },
+                )
                 Box(Modifier.weight(1f).fillMaxHeight()) {
                     when (val screen = stack.last()) {
                         Screen.Home -> HomeScreen()
@@ -143,7 +148,7 @@ private fun LibraryShell(
                     }
                 }
             }
-            // The full player covers the screen; the bar would only compete with its Queue pill.
+            // The full player covers the screen; the bar would only compete with its controls.
             if (!showPlayer) {
                 NowPlayingBar(
                     modifier = Modifier.align(Alignment.BottomCenter),
@@ -162,7 +167,7 @@ private fun LibraryShell(
 }
 
 @Composable
-private fun Sidebar(current: Screen, onGo: (Screen) -> Unit, onOpenPlayer: () -> Unit) {
+private fun Sidebar(current: Screen, onGo: (Screen) -> Unit) {
     val first = remember { FocusRequester() }
     val queued = Playback.queue.size
     val entries = listOf(
@@ -175,7 +180,6 @@ private fun Sidebar(current: Screen, onGo: (Screen) -> Unit, onOpenPlayer: () ->
         "Last.fm" to Screen.LastFmStats,
         "Settings" to Screen.Settings,
     )
-    val playing = Playback.current
 
     Column(
         Modifier.width(168.dp).fillMaxHeight().background(Colors.bg).padding(horizontal = 10.dp, vertical = 20.dp),
@@ -207,16 +211,6 @@ private fun Sidebar(current: Screen, onGo: (Screen) -> Unit, onOpenPlayer: () ->
                 selected = selected,
                 modifier = if (index == 0) Modifier.focusRequester(first) else Modifier,
                 onClick = { onGo(target) },
-            )
-        }
-
-        if (playing != null) {
-            Spacer(Modifier.height(10.dp))
-            SidebarItem(
-                label = if (Playback.playing) "Now playing  ▸" else "Now playing  ‖",
-                selected = false,
-                modifier = Modifier,
-                onClick = onOpenPlayer,
             )
         }
     }

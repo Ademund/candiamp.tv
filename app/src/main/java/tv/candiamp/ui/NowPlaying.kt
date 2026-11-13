@@ -203,18 +203,31 @@ fun NowPlayingScreen(onClose: () -> Unit, onOpenQueue: () -> Unit) {
                         if (current.albumId?.startsWith(Playback.RADIO_PREFIX) == true) {
                             "Left / Right seek 10 seconds · OK play or pause · Back to browse"
                         } else {
-                            "Left / Right seek 10 seconds · OK play or pause · Next / Previous track · Back to browse"
+                            "Left / Right seek 10 seconds · OK play or pause · Next / Previous below · Back to browse"
                         },
                         style = Type.sub,
                     )
                 }
             }
 
-            Spacer(Modifier.height(28.dp))
-            Pill(
-                text = if (queue.isEmpty()) "Queue" else "Queue · ${queue.size}",
-                onClick = onOpenQueue,
-            )
+            Spacer(Modifier.height(26.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (index > 0) {
+                    Pill(text = "Previous", onClick = { Playback.previous() })
+                }
+                Pill(
+                    text = if (Playback.playing) "Pause" else "Play",
+                    onClick = { Playback.toggle() },
+                    primary = true,
+                )
+                if (index in 0 until queue.lastIndex) {
+                    Pill(text = "Next", onClick = { Playback.next() })
+                }
+                Pill(
+                    text = if (queue.isEmpty()) "Queue" else "Queue · ${queue.size}",
+                    onClick = onOpenQueue,
+                )
+            }
         }
     }
 
