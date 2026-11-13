@@ -2,6 +2,7 @@ package tv.candiamp.ui
 
 import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.tv.material3.Border
 import androidx.tv.material3.Surface
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Text
@@ -77,6 +79,10 @@ fun NowPlayingBar(modifier: Modifier = Modifier, onOpen: () -> Unit) {
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(0.dp)),
         colors = ClickableSurfaceDefaults.colors(containerColor = Colors.bg2, focusedContainerColor = Colors.bg3),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
+        // The bar is the way into the player, so make it obvious when the remote is on it.
+        border = ClickableSurfaceDefaults.border(
+            focusedBorder = Border(BorderStroke(2.dp, Colors.accent), shape = RoundedCornerShape(0.dp)),
+        ),
     ) {
         Column(Modifier.padding(horizontal = 24.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -106,10 +112,15 @@ fun NowPlayingBar(modifier: Modifier = Modifier, onOpen: () -> Unit) {
     }
 }
 
-/** The full player: big cover, real seek, and the remote's own transport keys. */
+/** The full player: big cover, real seek, the next and previous queue entries, and the queue. */
 @Composable
-fun NowPlayingScreen(onClose: () -> Unit) {
+fun NowPlayingScreen(onClose: () -> Unit, onOpenQueue: () -> Unit) {
     val current = Playback.current
+    val queue = Playback.queue
+    val index = Playback.queueIndex
+    val previous = if (index > 0) queue.getOrNull(index - 1) else null
+    val next = if (index >= 0) queue.getOrNull(index + 1) else null
+    val upcoming = if (index >= 0) queue.size - index - 1 else queue.size
     val focus = remember { FocusRequester() }
     BackHandler { onClose() }
 
@@ -121,72 +132,112 @@ fun NowPlayingScreen(onClose: () -> Unit) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Colors.bg)
-            .focusRequester(focus)
-            .focusable()
-            .onKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
-                when (event.nativeKeyEvent.keyCode) {
-                    KeyEvent.KEYCODE_DPAD_LEFT -> { Playback.seekBy(-10_000); true }
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> { Playback.seekBy(10_000); true }
-                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER,
-                    KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSETHOOK -> { Playback.toggle(); true }
-                    KeyEvent.KEYCODE_MEDIA_NEXT -> { Playback.next(); true }
-                    KeyEvent.KEYCODE_MEDIA_PREVIOUS -> { Playback.previous(); true }
-                    else -> false
-                }
-            },
+            .background(Colors.bg),
         contentAlignment = Alignment.Center,
     ) {
-        Row(
-            Modifier.padding(horizontal = 72.dp),
-            horizontalArrangement = Arrangement.spacedBy(48.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            RawCover(current.coverUrl, Modifier.size(420.dp))
-            Column(Modifier.width(560.dp)) {
-                Text(
-                    current.title,
-                    style = Type.hero.copy(fontSize = 40.sp),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(10.dp))
-                Text(current.artist, style = Type.section.copy(color = Colors.muted), maxLines = 1)
-                if (!current.albumName.isNullOrBlank()) {
-                    Text(current.albumName, style = Type.sub.copy(fontSize = 14.sp), maxLines = 1)
-                }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(
+                Modifier
+                    .padding(horizontal = 72.dp)
+                    .focusRequester(focus)
+                    .focusable()
+                    .onKeyEvent { event ->
+                        if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                        when (event.nativeKeyEvent.keyCode) {
+                            KeyEvent.KEYCODE_DPAD_LEFT -> { Playback.seekBy(-10_000); true }
+                            KeyEvent.KEYCODE_DPAD_RIGHT -> { Playback.seekBy(10_000); true }
+                            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER,
+                            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSETHOOK -> { Playback.toggle(); true }
+                            KeyEvent.KEYCODE_MEDIA_NEXT -> { Playback.next(); true }
+                            KeyEvent.KEYCODE_MEDIA_PREVIOUS -> { Playback.previous(); true }
+                            else -> false
+                        }
+                    },
+                horizontalArrangement = Arrangement.spacedBy(48.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RawCover(current.coverUrl, Modifier.size(420.dp))
+                Column(Modifier.width(560.dp)) {
+                    Text(
+                        current.title,
+                        style = Type.hero.copy(fontSize = 40.sp),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(current.artist, style = Type.section.copy(color = Colors.muted), maxLines = 1)
+                    if (!current.albumName.isNullOrBlank()) {
+                        Text(current.albumName, style = Type.sub.copy(fontSize = 14.sp), maxLines = 1)
+                    }
 
-                Spacer(Modifier.height(34.dp))
-                Box(Modifier.fillMaxWidth().height(6.dp).background(Colors.bg3, RoundedCornerShape(3.dp))) {
-                    Box(
-                        Modifier.fillMaxWidth(fraction()).fillMaxHeight()
-                            .background(Colors.accent, RoundedCornerShape(3.dp)),
+                    Spacer(Modifier.height(34.dp))
+                    Box(Modifier.fillMaxWidth().height(6.dp).background(Colors.bg3, RoundedCornerShape(3.dp))) {
+                        Box(
+                            Modifier.fillMaxWidth(fraction()).fillMaxHeight()
+                                .background(Colors.accent, RoundedCornerShape(3.dp)),
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(clock(Playback.positionMs), style = Type.sub)
+                        Text(clock(Playback.durationMs), style = Type.sub)
+                    }
+
+                    Spacer(Modifier.height(22.dp))
+                    Text(
+                        if (Playback.playing) "Playing" else "Paused",
+                        style = Type.section.copy(color = Colors.accent),
+                    )
+
+                    if (previous != null) {
+                        Spacer(Modifier.height(18.dp))
+                        QueuePeek("Previous", previous)
+                    }
+                    if (next != null) {
+                        Spacer(Modifier.height(10.dp))
+                        QueuePeek(if (upcoming > 1) "Up next · $upcoming in the queue" else "Up next", next)
+                    }
+
+                    Spacer(Modifier.height(22.dp))
+                    Text(
+                        if (current.albumId?.startsWith(Playback.RADIO_PREFIX) == true) {
+                            "Left / Right seek 10 seconds · OK play or pause · Back to browse"
+                        } else {
+                            "Left / Right seek 10 seconds · OK play or pause · Next / Previous track · Back to browse"
+                        },
+                        style = Type.sub,
                     )
                 }
-                Spacer(Modifier.height(8.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(clock(Playback.positionMs), style = Type.sub)
-                    Text(clock(Playback.durationMs), style = Type.sub)
-                }
-
-                Spacer(Modifier.height(22.dp))
-                Text(
-                    if (Playback.playing) "Playing" else "Paused",
-                    style = Type.section.copy(color = Colors.accent),
-                )
-                Spacer(Modifier.height(26.dp))
-                Text(
-                    if (current.albumId?.startsWith(Playback.RADIO_PREFIX) == true) {
-                        "Left / Right seek 10 seconds · OK play or pause · Back to browse"
-                    } else {
-                        "Left / Right seek 10 seconds · OK play or pause · Next / Previous track · Back to browse"
-                    },
-                    style = Type.sub,
-                )
             }
+
+            Spacer(Modifier.height(28.dp))
+            Pill(
+                text = if (queue.isEmpty()) "Queue" else "Queue · ${queue.size}",
+                onClick = onOpenQueue,
+            )
         }
     }
 
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+}
+
+/** The queue entry before or after the current track, in the full player. */
+@Composable
+private fun QueuePeek(label: String, entry: Playback.QueueEntry) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        RawCover(entry.artworkUrl, Modifier.size(44.dp))
+        Column(Modifier.weight(1f)) {
+            Text(label, style = Type.sub.copy(fontSize = 11.sp))
+            Text(entry.title, style = Type.body, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                listOfNotNull(entry.artist.takeIf { it.isNotBlank() }, entry.album).joinToString(" · "),
+                style = Type.sub,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
 }
