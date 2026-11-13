@@ -2,19 +2,19 @@
 
 Your Bandcamp collection, on the TV. An unofficial Android TV client for the **Subsonic endpoint Bandcamp shipped in July 2026** — no server in the middle, no Bandcamp account. Radio is the one scraped exception; Last.fm is optional.
 
-![Home](docs/02-home.png)
+![Home](docs/01-home.webp)
 
 ## Status
 
-Working, on a TCL Google TV (Android 14, `G08_4K_GB`), sideloaded. Built as a private app first; nothing here is published.
+Working, on a TCL Google TV (Android 14, `G08_4K_GB`), sideloaded. The app itself is not published; [candiamp.tv](https://candiamp.tv) describes it.
 
 | Works | Notes |
 |---|---|
 | Browse collection | Artists → records → tracks, cached on disk |
 | Search | `search3` over your own collection, with an on-screen keyboard, artist/album details on track results, and playback from results |
-| Recently added / shuffled rows | From the album list, newest first |
+| Recently added / shuffled rows | From the album list, newest first; records without audio stay off the home feed |
 | Queue | The live player timeline: play, move or remove any track; play next / add to queue from a record page or by long-pressing a track |
-| Play | 256 kbps VBR MP3, **seeking works** (server answers `206 Partial Content`) |
+| Play | 256 kbps VBR MP3, **seeking works** (server answers `206 Partial Content`), with Previous / Pause / Next buttons in the player |
 | TV remote | OK / play-pause / next / previous / 10-second seek |
 | Background audio | Keeps playing when you leave the app (`MediaSession`) |
 | Pairing from a phone | Local HTTP page served by the TV itself |
@@ -29,6 +29,16 @@ Working, on a TCL Google TV (Android 14, `G08_4K_GB`), sideloaded. Built as a pr
 | Offline downloads — `download` returns an error; the API has no download role |
 | Quality choice — `maxBitRate` is ignored, one encode only |
 | Lyrics, similar artists, song info — not implemented by Bandcamp |
+
+## Queue and transport
+
+The queue is the player's timeline, not a wish list: it is the media items ExoPlayer is holding, so played tracks stay above the current one and upcoming tracks below it.
+
+- **Play next** inserts the selection directly after the current track; **Add to queue** appends it. Both are on a record page (for the whole record) and in the long-press sheet on any track, including search results.
+- In the **Queue** screen, OK jumps to a row. Long-press offers Play now, Move up, Move down and Remove from queue; removing what is playing moves on to the next track.
+- The sidebar entry carries the number queued, and the full player shows the previous and next entries plus a Queue button.
+- Played tracks are dimmed and the current one is marked **Playing**, so the list reads as history and intent at once.
+- The player's Previous / Pause / Next buttons mean the remote's media keys are optional; OK still plays and pauses, Left and Right still seek ten seconds. Radio is a single compiled stream and deliberately does not join the queue.
 
 ## Install
 
@@ -88,12 +98,15 @@ The **Last.fm** sidebar entry shows the linked profile and top artists, albums a
 
 ## Screens
 
+Screenshots come from the app running against a demonstration collection. The artists, records and artwork are invented for the page; no real Bandcamp library appears.
+
 | | |
 |---|---|
-| ![Record](docs/11-playing.png) | ![Player](docs/13-player-seek.png) |
-| ![Records](docs/16-records-grid.png) | ![Artists](docs/17-artists-grid.png) |
-| ![Label](docs/21-blang-label.png) | ![Vinyl only](docs/22-vinyl-only.png) |
-| ![Search](docs/24-search-results.png) | ![Search, tracks](docs/26-search-play.png) |
+| ![Records](docs/02-records.webp) | ![A record](docs/03-record.webp) |
+| ![Queue](docs/04-queue.webp) | ![Queue actions](docs/05-queue-actions.webp) |
+| ![Player](docs/06-player.webp) | ![Artists](docs/07-artists.webp) |
+| ![Search](docs/08-search.webp) | ![First run](docs/09-pairing.webp) |
+| ![No audio](docs/10-no-audio.webp) | |
 
 Layout is built for a 960×540 dp canvas: the sidebar is 168 dp, records use `GridCells.Adaptive`, and rows carry focus-ring padding — a fixed four-across row silently squashed its last card on a 1080p TV.
 
@@ -160,12 +173,20 @@ data/Scrobble.kt         scrobble rules and the durable queue
 data/Scrobbler.kt        playback → now-playing/scrobble orchestration
 data/KeystoreCrypto.kt   AES-GCM helper for values held by the Android keystore
 data/Credentials.kt      server/user in prefs, password sealed with the Android keystore
-playback/Playback.kt     one ExoPlayer + MediaSession for the app, stream URLs resolved at play time
+playback/Playback.kt     one ExoPlayer + MediaSession + the queue; stream URLs resolved at play time
 pairing/PairingServer.kt a ~200-line local HTTP server serving the setup form
 pairing/LastFmServer.kt  the LAN page that collects the Last.fm key and links the account
-ui/                      Compose for TV: sidebar, rows, record page, radio, player, settings
+ui/                      Compose for TV: sidebar, rows, record page, queue, radio, player, settings
+ui/QueueScreen.kt        the player timeline: jump to a row, move it, remove it
+ui/ActionSheet.kt        the long-press sheet for tracks and queue rows
 ```
 
 `MusicSource` seam: everything the UI needs for the collection is `MusicLibrary`. Radio deliberately sits beside it as its own `RadioLibrary`, because it is scraped and must be able to fail without touching collection playback. A future web build would need a proxy, not a rewrite.
 
 ## Not affiliated with Bandcamp
+
+Bandcamp is a trademark of Bandcamp, Inc. The name is used here only to say what the app connects to.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
