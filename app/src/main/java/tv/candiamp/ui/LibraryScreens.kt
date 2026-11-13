@@ -24,7 +24,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.tv.material3.Text
 import tv.candiamp.data.Album
+import tv.candiamp.data.Song
 import tv.candiamp.data.runtime
 import tv.candiamp.playback.Playback
 
@@ -184,8 +186,10 @@ fun AlbumDetailScreen(albumId: String) {
         if (record.songs.isNotEmpty()) runCatching { playFocus.requestFocus() }
     }
     val coverUrl = remember(record.coverArt) { library.coverUrl(record.coverArt) }
+    val artwork: (Song) -> String? = { song -> library.coverUrl(song.coverArt) ?: coverUrl }
     val songs = record.songs
     val now = Playback.current
+    var actionsSong by remember(albumId) { mutableStateOf<Song?>(null) }
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -215,6 +219,19 @@ fun AlbumDetailScreen(albumId: String) {
                                 Playback.playRecord(context, record, shuffled, 0, coverUrl, library::streamUrl)
                             })
                         }
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 8.dp)) {
+                            Pill("Play next", onClick = {
+                                Playback.playNext(context, record, songs, artwork, library::streamUrl)
+                            })
+                            Pill("Add to queue", onClick = {
+                                Playback.enqueue(context, record, songs, artwork, library::streamUrl)
+                            })
+                        }
+                        Text(
+                            "Long-press a track for play next or add to queue",
+                            style = Type.sub,
+                            modifier = Modifier.padding(top = 10.dp),
+                        )
                     }
                 }
             }
@@ -236,9 +253,36 @@ fun AlbumDetailScreen(albumId: String) {
         }
         itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
             val playing = now?.albumId == record.id && now.title == song.title
-            TrackRow(song, "${song.track ?: index + 1}", playing) {
-                Playback.playRecord(context, record, songs, index, coverUrl, library::streamUrl)
-            }
+            TrackRow(
+                song = song,
+                number = "${song.track ?: index + 1}",
+                playing = playing,
+                onClick = {
+                    Playback.playRecord(context, record, songs, index, coverUrl, library::streamUrl)
+                },
+                onLongClick = { actionsSong = song },
+            )
         }
+    }
+
+    actionsSong?.let { song ->
+        val index = songs.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+        TrackActions(
+            song = song,
+            albumTitle = record.name,
+            onPlay = {
+                actionsSong = null
+                Playback.playRecord(context, record, songs, index, coverUrl, library::streamUrl)
+            },
+            onPlayNext = {
+                actionsSong = null
+                Playback.playNext(context, record, listOf(song), artwork, library::streamUrl)
+            },
+            onAddToQueue = {
+                actionsSong = null
+                Playback.enqueue(context, record, listOf(song), artwork, library::streamUrl)
+            },
+            onDismiss = { actionsSong = null },
+        )
     }
 }

@@ -33,6 +33,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import kotlinx.coroutines.delay
 import tv.candiamp.data.SearchHit
+import tv.candiamp.data.Song
 import tv.candiamp.playback.Playback
 
 private val SEARCH_PADDING = PaddingValues(start = 28.dp, end = 24.dp, top = 16.dp, bottom = 160.dp)
@@ -49,6 +50,7 @@ fun SearchScreen() {
     var hit by remember { mutableStateOf<SearchHit?>(null) }
     var searching by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<String?>(null) }
+    var actionsSong by remember { mutableStateOf<Song?>(null) }
     val firstKey = remember { FocusRequester() }
 
     LaunchedEffect(Unit) { runCatching { firstKey.requestFocus() } }
@@ -120,15 +122,22 @@ fun SearchScreen() {
                                         song.artistName?.takeIf { it.isNotBlank() },
                                         song.albumName?.takeIf { it.isNotBlank() },
                                     ).distinct().joinToString(" · ").takeIf { it.isNotBlank() }
-                                    TrackRow(song, "${index + 1}", playing, metadata = metadata) {
-                                        Playback.playSongs(
-                                            context = context,
-                                            songs = results.songs,
-                                            startIndex = index,
-                                            streamUrl = library::streamUrl,
-                                            artwork = { s -> library.coverUrl(s.coverArt) },
-                                        )
-                                    }
+                                    TrackRow(
+                                        song = song,
+                                        number = "${index + 1}",
+                                        playing = playing,
+                                        metadata = metadata,
+                                        onClick = {
+                                            Playback.playSongs(
+                                                context = context,
+                                                songs = results.songs,
+                                                startIndex = index,
+                                                streamUrl = library::streamUrl,
+                                                artwork = { s -> library.coverUrl(s.coverArt) },
+                                            )
+                                        },
+                                        onLongClick = { actionsSong = song },
+                                    )
                                 }
                             }
                         }
@@ -136,6 +145,48 @@ fun SearchScreen() {
                 }
             }
         }
+    }
+
+    actionsSong?.let { song ->
+        val songs = hit?.songs.orEmpty()
+        val index = songs.indexOfFirst { it.id == song.id }
+        TrackActions(
+            song = song,
+            albumTitle = song.albumName,
+            onPlay = {
+                actionsSong = null
+                if (index >= 0) {
+                    Playback.playSongs(
+                        context = context,
+                        songs = songs,
+                        startIndex = index,
+                        streamUrl = library::streamUrl,
+                        artwork = { s -> library.coverUrl(s.coverArt) },
+                    )
+                }
+            },
+            onPlayNext = {
+                actionsSong = null
+                Playback.playNext(
+                    context = context,
+                    album = null,
+                    songs = listOf(song),
+                    artwork = { s -> library.coverUrl(s.coverArt) },
+                    streamUrl = library::streamUrl,
+                )
+            },
+            onAddToQueue = {
+                actionsSong = null
+                Playback.enqueue(
+                    context = context,
+                    album = null,
+                    songs = listOf(song),
+                    artwork = { s -> library.coverUrl(s.coverArt) },
+                    streamUrl = library::streamUrl,
+                )
+            },
+            onDismiss = { actionsSong = null },
+        )
     }
 }
 

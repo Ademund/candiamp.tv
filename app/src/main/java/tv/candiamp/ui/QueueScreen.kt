@@ -1,7 +1,6 @@
 package tv.candiamp.ui
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,8 +29,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Surface
@@ -175,39 +172,19 @@ private fun QueueActions(
     onRemove: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val first = remember { FocusRequester() }
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        Box(
-            Modifier
-                .width(420.dp)
-                .background(Colors.bg2, RoundedCornerShape(16.dp))
-                .padding(24.dp),
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Queue", style = Type.sub)
-                Text(entry.title, style = Type.section, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(
-                    listOfNotNull(
-                        entry.artist.takeIf { it.isNotBlank() },
-                        entry.album?.takeIf { it.isNotBlank() },
-                    ).joinToString(" · "),
-                    style = Type.sub,
-                )
-                Spacer(Modifier.height(6.dp))
-                Pill(
-                    text = "Play now",
-                    onClick = onPlay,
-                    modifier = Modifier.focusRequester(first),
-                    primary = true,
-                )
-                if (canMoveUp) Pill("Move up", onClick = onMoveUp)
-                if (canMoveDown) Pill("Move down", onClick = onMoveDown)
-                Pill("Remove from queue", onClick = onRemove)
-            }
-        }
-    }
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    ActionSheet(
+        heading = "Queue",
+        title = entry.title,
+        subtitle = listOfNotNull(
+            entry.artist.takeIf { it.isNotBlank() },
+            entry.album?.takeIf { it.isNotBlank() },
+        ).joinToString(" · ").ifBlank { null },
+        actions = buildList {
+            add(SheetAction("Play now", onPlay))
+            if (canMoveUp) add(SheetAction("Move up", onMoveUp))
+            if (canMoveDown) add(SheetAction("Move down", onMoveDown))
+            add(SheetAction("Remove from queue", onRemove))
+        },
+        onDismiss = onDismiss,
+    )
 }

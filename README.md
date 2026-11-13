@@ -13,7 +13,7 @@ Working, on a TCL Google TV (Android 14, `G08_4K_GB`), sideloaded. Built as a pr
 | Browse collection | Artists → records → tracks, cached on disk |
 | Search | `search3` over your own collection, with an on-screen keyboard, artist/album details on track results, and playback from results |
 | Recently added / shuffled rows | From the album list, newest first |
-| Queue | The live player timeline: play, move or remove any track; previous and up-next in the player |
+| Queue | The live player timeline: play, move or remove any track; play next / add to queue from a record page or by long-pressing a track |
 | Play | 256 kbps VBR MP3, **seeking works** (server answers `206 Partial Content`) |
 | TV remote | OK / play-pause / next / previous / 10-second seek |
 | Background audio | Keeps playing when you leave the app (`MediaSession`) |
