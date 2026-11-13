@@ -93,6 +93,14 @@ class MusicLibrary(private val context: Context, private val credentials: Creden
             val byId = LinkedHashMap<String, Album>()
             for (card in cards) byId[card.id] = card
 
+            // How many artists in the index claim each `ci:` picture. Bandcamp repeats one image
+            // across a label and the artists on it, so a count above one means it is not the
+            // artist's own.
+            val imageOwners = index
+                .mapNotNull { it.coverArt?.takeIf(String::isNotBlank) }
+                .groupingBy { it }
+                .eachCount()
+
             val artists = ArrayList<Artist>(index.size)
             for ((position, artist) in index.withIndex()) {
                 status = "Reading artists… ${position + 1} of ${index.size}"
@@ -108,11 +116,12 @@ class MusicLibrary(private val context: Context, private val credentials: Creden
                 artists += Artist(
                     id = artist.id,
                     name = artist.name,
-                    // Bandcamp hands out the same `ci:` cover for several artists (Blang's logo came
-                    // back for five of them), so use artwork from a record actually credited to them.
-                    coverArt = albumList.firstOrNull { it.artist == artist.name }?.coverArt
-                        ?: albumList.firstOrNull()?.coverArt
-                        ?: artist.coverArt,
+                    coverArt = chooseArtistCover(
+                        ownImage = artist.coverArt,
+                        imageOwners = imageOwners,
+                        creditedAlbum = albumList.firstOrNull { it.artist == artist.name }?.coverArt,
+                        firstAlbum = albumList.firstOrNull()?.coverArt,
+                    ),
                     albums = albumList,
                     isLabel = otherArtists >= 2,
                 )
@@ -200,7 +209,29 @@ class MusicLibrary(private val context: Context, private val credentials: Creden
 
     companion object {
         /** Bump with any change to how the library is built, so caches refresh on next launch. */
-        const val VERSION = 6
+        const val VERSION = 7
         private val DATE = SimpleDateFormat("dd MMM yyyy HH:mm:ss z", Locale.US)
+    }
+}
+
+/**
+ * Artwork for an artist page. `getArtists` gives every artist a profile picture, but Bandcamp
+ * repeats one image across a label and everyone it releases: Blang's logo arrived for the label
+ * and four of its artists, and two Stanley Brinks projects shared a picture belonging to neither.
+ * An image only counts as the artist's own when nobody else in the collection claims it. Without
+ * one, a record credited to the artist is a better answer than a stranger's face.
+ */
+internal fun chooseArtistCover(
+    ownImage: String?,
+    imageOwners: Map<String, Int>,
+    creditedAlbum: String?,
+    firstAlbum: String?,
+): String? {
+    val own = ownImage?.takeIf(String::isNotBlank)
+    val shared = own != null && (imageOwners[own] ?: 0) > 1
+    return when {
+        own != null && !shared -> own
+        creditedAlbum != null -> creditedAlbum
+        else -> firstAlbum ?: own
     }
 }
