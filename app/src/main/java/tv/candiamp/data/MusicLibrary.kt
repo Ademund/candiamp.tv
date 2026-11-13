@@ -42,12 +42,16 @@ class MusicLibrary(private val context: Context, private val credentials: Creden
     val albums: List<Album> get() = snapshot?.albums.orEmpty()
     val artists: List<Artist> get() = snapshot?.artists.orEmpty()
 
+    /** Records with audio to stream; the "no audio" ones stay on the records and artist pages only. */
+    private val playableAlbums: List<Album> get() = albums.filterNot { it.unavailable }
+
     fun album(id: String?): Album? = id?.let { wanted -> details[wanted] ?: albums.firstOrNull { it.id == wanted } }
     fun artist(id: String?): Artist? = id?.let { wanted -> artists.firstOrNull { it.id == wanted } }
 
-    fun newest(count: Int): List<Album> = albums.sortedByDescending { created(it) }.take(count)
+    // Both feed the home page, which only offers something you can play.
+    fun newest(count: Int): List<Album> = playableAlbums.sortedByDescending { created(it) }.take(count)
 
-    fun shuffle(count: Int): List<Album> = albums.shuffled().take(count)
+    fun shuffle(count: Int): List<Album> = playableAlbums.shuffled().take(count)
 
     fun byArtist(artistId: String): List<Album> = albums.filter { it.artistId == artistId }
 

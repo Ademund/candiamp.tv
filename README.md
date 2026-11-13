@@ -139,7 +139,7 @@ And four rules learned the hard way:
 
 Other quirks: no `discNumber` (long albums flatten to `track` 1..N), no `year` on albums (`created` only), `type=starred` returns the entire collection, and `getCoverArt` serves one fixed ~16 KB JPEG and ignores `size`.
 
-**Zero-track records are vinyl-only.** Three of the seventeen have `songCount: 0`: Bandcamp sells them but has no audio to stream, exactly as the website shows them. The app lists them (counting only playable records would make it disagree with the site), marks the card **no audio**, and hides Play on the record page.
+**Zero-track records are vinyl-only.** Three of the seventeen have `songCount: 0`: Bandcamp sells them but has no audio to stream, exactly as the website shows them. The app lists them on the records and artist pages (counting only playable records would make it disagree with the site), marks the card **no audio**, hides Play on the record page, and leaves them out of the home feed — the home rows are for things you can actually play.
 
 **Single tracks collected on their own are listed but unreachable.** Fourth case: `a:2067464040` "Under A Black Moon" appears in `getAlbumList2` with `songCount: 1`, yet `getAlbum` answers `{"status":"failed","error":{"code":70,"message":"not found"}}`, `getSong` knows neither `t:` nor `a:` with that number, `search3` finds nothing and `stream` returns XML. The website plays it from the release page; the API cannot. Sync therefore probes every one-track entry once and flags it the same way, so the card carries **no audio** before you open it and the record page explains which case it is.
 

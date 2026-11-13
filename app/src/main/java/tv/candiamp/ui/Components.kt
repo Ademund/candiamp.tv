@@ -200,13 +200,15 @@ fun AlbumsRow(albums: List<Album>, firstFocus: FocusRequester? = null) {
 }
 
 @Composable
-fun ArtistsRow(artists: List<Artist>) {
+fun ArtistsRow(artists: List<Artist>, firstFocus: FocusRequester? = null) {
     if (artists.isEmpty()) return
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = PaddingValues(start = 10.dp, end = 28.dp),
     ) {
-        items(artists, key = { it.id }) { ArtistCard(it) }
+        items(artists, key = { it.id }) { artist ->
+            ArtistCard(artist, focusRequester = if (artist === artists.first()) firstFocus else null)
+        }
     }
 }
 

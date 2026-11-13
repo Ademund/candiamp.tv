@@ -51,9 +51,16 @@ fun HomeScreen() {
                 Status("Your collection is empty. Buy or collect something on Bandcamp, then sync from Settings.")
             }
             else -> {
-                item { SectionRow("Recently added") { AlbumsRow(newest, first) } }
-                item { SectionRow("Something else", "Shuffled every time you open the app") { AlbumsRow(shuffle) } }
-                item { SectionRow("Artists") { ArtistsRow(snapshot.artists) } }
+                // The feed only carries records with audio; the records and artist pages list everything.
+                if (newest.isNotEmpty()) item { SectionRow("Recently added") { AlbumsRow(newest, first) } }
+                if (shuffle.isNotEmpty()) {
+                    item { SectionRow("Something else", "Shuffled every time you open the app") { AlbumsRow(shuffle) } }
+                }
+                item {
+                    SectionRow("Artists") {
+                        ArtistsRow(snapshot.artists, if (newest.isEmpty() && shuffle.isEmpty()) first else null)
+                    }
+                }
                 if (library.syncing) item { Status(library.status.ifBlank { "Syncing…" }) }
             }
         }
