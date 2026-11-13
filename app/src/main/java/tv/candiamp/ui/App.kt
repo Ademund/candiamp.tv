@@ -1,6 +1,7 @@
 package tv.candiamp.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -27,12 +27,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
+import tv.candiamp.R
 import tv.candiamp.data.Credentials
 import tv.candiamp.data.LastFmCredentials
 import tv.candiamp.data.LastFmStats
@@ -164,14 +167,12 @@ private fun Sidebar(current: Screen, onGo: (Screen) -> Unit, onOpenPlayer: () ->
         Modifier.width(168.dp).fillMaxHeight().background(Colors.bg).padding(horizontal = 10.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier.size(34.dp).background(Colors.accent, RoundedCornerShape(9.dp)),
-                contentAlignment = Alignment.Center,
-            ) { Text("c", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Colors.accentDark) }
-            Spacer(Modifier.width(12.dp))
-            Text("candiamp", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Colors.text)
-        }
+        Image(
+            painter = painterResource(R.drawable.logo),
+            contentDescription = "candiamp",
+            modifier = Modifier.fillMaxWidth().height(74.dp),
+            contentScale = ContentScale.Fit,
+        )
         Spacer(Modifier.height(18.dp))
 
         for ((index, entry) in entries.withIndex()) {

@@ -43,7 +43,7 @@ fun HomeScreen() {
         contentPadding = pagePadding,
         verticalArrangement = Arrangement.spacedBy(26.dp),
     ) {
-        item { PageHead("candiamp", subtitle = "Your Bandcamp collection") }
+        item { PageHead("Collection", subtitle = "Your Bandcamp collection") }
         when {
             library.syncing && snapshot == null -> item { Status(library.status.ifBlank { "Reading your collection…" }) }
             library.lastError != null && snapshot == null -> item { Status("Couldn't reach Bandcamp: ${library.lastError}") }
